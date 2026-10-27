@@ -77,3 +77,33 @@ test('crowd density setting scales both sides, not just one', () => {
   const cass = (w) => w.pop * w.level.cassFrac / w.scale;
   assert.ok(Math.abs(cass(hi) / cass(lo) - 1) < 1e-9, 'casseur count should not scale with density');
 });
+
+test('gamepad: radial deadzone has no square gaps on the diagonal', () => {
+  // a diagonal push just past the dead radius must register, at the same magnitude as a straight one
+  const d = P.radialDeadzone(0.15, 0.15, 0.18), s = P.radialDeadzone(0.2121, 0, 0.18);
+  assert.ok(d.m > 0, 'diagonal beyond the radius is live');
+  assert.ok(Math.abs(d.m - s.m) < 1e-3, 'same magnitude regardless of angle');
+  assert.strictEqual(P.radialDeadzone(0.1, 0.1, 0.18).m, 0);
+  assert.ok(Math.abs(P.radialDeadzone(1, 0, 0.18).m - 1) < 1e-9, 'full tilt reaches 1');
+});
+
+test('gamepad: button edges and menu repeat', () => {
+  const state = { buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0], connected: true, id: 'Test pad' };
+  const pad = new P.PadInput(() => [null, state]);
+  pad.poll(1 / 60);
+  assert.ok(pad.connected && !pad.any);
+  state.buttons[0] = { pressed: true, value: 1 };
+  pad.poll(1 / 60); assert.ok(pad.pressed(0));
+  pad.poll(1 / 60); assert.ok(!pad.pressed(0) && pad.held(0));
+  state.buttons[0] = { pressed: false, value: 0 };
+  pad.poll(1 / 60); assert.ok(pad.released(0));
+  // hold D-pad down: fires once, waits, then repeats
+  state.buttons[13] = { pressed: true, value: 1 };
+  let fires = 0;
+  for (let f = 0; f < 60; f++) { pad.poll(1 / 60); if (pad.nav === 'down') fires++; }
+  assert.ok(fires >= 4 && fires <= 7, 'one second of hold gave ' + fires + ' steps');
+  // stick works for menus too
+  state.buttons[13] = { pressed: false, value: 0 }; pad.poll(1 / 60);
+  state.axes = [0.9, 0.1, 0, 0]; pad.poll(1 / 60);
+  assert.strictEqual(pad.nav, 'right');
+});

@@ -133,3 +133,14 @@ h3 { font-family: var(--font); margin: 0 0 6px; color: var(--y); font-size: 15px
   #topRight { width: 200px; }
   .tool { width: 62px; height: 60px; }
 }
+
+/* ---------------- gamepad ---------------- */
+#padCursor { position: absolute; left: 0; top: 0; width: 26px; height: 26px; margin: -13px 0 0 -13px; pointer-events: none; z-index: 20;
+  border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,.6), inset 0 0 0 2px rgba(0,0,0,.4); }
+#padCursor::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: var(--y); border-radius: 50%; }
+#padHints { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line);
+  padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #ddd; white-space: nowrap; pointer-events: none; max-width: 96vw; overflow: hidden; text-overflow: ellipsis; }
+body.pad .padFocus { outline: 3px solid var(--y); outline-offset: 3px; }
+body.pad #view { cursor: none; }
+#padStatus { color: var(--mut); font-size: 13px; }
+body.pad #tip { bottom: 124px; }

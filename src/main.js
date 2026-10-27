@@ -175,7 +175,9 @@
   }
   function captionOnce(key, a, b) { if (shownCaptions[key]) return; shownCaptions[key] = 1; caption(a, b, 2.6); }
   let tipT = 0;
-  function tip(text) { $('tip').textContent = text; $('tip').classList.add('show'); tipT = 2.2; }
+  function tip(text) {
+    if (lastInput === 'pad') text = text.replace(/^Drag/, 'Hold A and move').replace(/right-click/g, 'press B').replace(/^Click/, 'Press A').replace(/click/g, 'select');
+    $('tip').textContent = text; $('tip').classList.add('show'); tipT = 2.2; }
 
   // ------------------------------------------------------------ tools
   const PROT_TOOLS = [
@@ -394,6 +396,7 @@
     }
   });
   addEventListener('mousemove', (e) => {
+    if (e.movementX || e.movementY) lastInput = 'mouse';
     const r = canvas.getBoundingClientRect();
     mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top;
     if (mouse.mid) {
@@ -448,6 +451,172 @@
     paused = !paused;
     if (paused) show('pauseMenu'); else hideScreens();
   }
+
+  // ------------------------------------------------------------ gamepad
+  // A thin adapter: every pad action calls the same functions the mouse and
+  // keyboard use, so a new tool can't silently miss one input surface.
+  const pad = new P.PadInput();
+  const PB = P.PAD;
+  let lastInput = 'mouse', padFocus = null, padCur = { x: 0, y: 0, init: false };
+
+  function focusables() {
+    const scr = current && $(current);
+    if (!scr) return [];
+    return Array.from(scr.querySelectorAll('button, select, input')).filter((el) =>
+      el.offsetParent !== null && !el.classList.contains('hidden') && !el.classList.contains('locked') && !el.disabled);
+  }
+  function setFocus(el) {
+    if (padFocus) padFocus.classList.remove('padFocus');
+    padFocus = el;
+    if (el) { el.classList.add('padFocus'); el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'nearest' }); }
+  }
+  function defaultFocus(list) {
+    return list.find((el) => el.classList.contains('big') && !el.classList.contains('back')) || list.find((el) => !el.classList.contains('back')) || list[0] || null;
+  }
+  // spatial navigation: nearest element in the pressed direction, so grids and
+  // forms move by their real rows/columns instead of one flat list
+  function moveFocus(dir) {
+    const list = focusables();
+    if (!list.length) return;
+    if (!padFocus || !list.includes(padFocus)) { setFocus(defaultFocus(list)); return; }
+    const r0 = padFocus.getBoundingClientRect(), cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+    const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0, dy = dir === 'up' ? -1 : dir === 'down' ? 1 : 0;
+    let best = null, bs = Infinity;
+    for (const el of list) {
+      if (el === padFocus) continue;
+      const r = el.getBoundingClientRect(), ex = r.left + r.width / 2 - cx, ey = r.top + r.height / 2 - cy;
+      const along = ex * dx + ey * dy;
+      if (along <= 4) continue;
+      const score = along + Math.abs(ex * dy - ey * dx) * 2.5;
+      if (score < bs) { bs = score; best = el; }
+    }
+    if (best) { setFocus(best); audio.play('ui'); }
+  }
+  function adjust(el, d) {
+    if (el.tagName === 'SELECT') {
+      const n = el.options.length;
+      el.selectedIndex = (el.selectedIndex + d + n) % n;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    if (el.tagName === 'INPUT' && (el.type === 'range' || el.type === 'number')) {
+      const step = +el.step || 1, v = +el.value + d * step;
+      el.value = el.type === 'range' ? P.clamp(v, +el.min, +el.max) : v;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    return false;
+  }
+  function menuPad() {
+    const list = focusables();
+    // the first input on a screen only lands focus; it doesn't also move it
+    if (!padFocus || !list.includes(padFocus)) { setFocus(defaultFocus(list)); return; }
+    if (pad.nav) {
+      if ((pad.nav === 'left' || pad.nav === 'right') && padFocus && adjust(padFocus, pad.nav === 'left' ? -1 : 1)) audio.play('ui');
+      else moveFocus(pad.nav);
+    }
+    if (pad.pressed(PB.A) && padFocus) {
+      audio.init();
+      if (padFocus.tagName === 'SELECT') adjust(padFocus, 1);
+      else if (!(padFocus.tagName === 'INPUT' && padFocus.type !== 'checkbox')) padFocus.click();
+    }
+    if (pad.pressed(PB.B)) { // always-available back
+      if (current === 'pauseMenu') togglePause();
+      else { const b = list.find((el) => el.classList.contains('back')); if (b) { audio.init(); b.click(); } }
+    }
+    if (pad.pressed(PB.START) && current === 'pauseMenu') togglePause();
+  }
+  function cycleTool(d) {
+    const ts = tools().filter((t) => t.id !== 'mobilise' && t.id !== 'reinforce');
+    const i = ts.findIndex((t) => t.id === tool);
+    pickTool(ts[(i + d + ts.length) % ts.length].id);
+  }
+  function centerSel() {
+    if (world.side === S.PROTEST) { const b = world.blocs[selBloc]; if (b && b.n) { cam.x = b.cx; cam.y = b.cy; } }
+    else { const sq = world.squads[selSquad]; if (sq) { cam.x = sq.ax; cam.y = sq.ay; } }
+  }
+  function gamePad(dt) {
+    if (pad.pressed(PB.START)) { togglePause(); return; }
+    if (pad.pressed(PB.BACK)) cycleSpeed();
+    if (paused) return;
+    // virtual cursor on the left stick, with a response curve for fine aim
+    if (!padCur.init) { padCur.x = canvas.width / 2; padCur.y = canvas.height / 2; padCur.init = true; }
+    const sp = 1150 * Math.pow(pad.lm, 1.7) * dt;
+    if (pad.lm > 0) { padCur.x += pad.lx / pad.lm * sp; padCur.y += pad.ly / pad.lm * sp; }
+    const edgePan = 520 / cam.zoom * dt;
+    if (padCur.x <= 2 && pad.lx < 0) cam.x -= edgePan * pad.lm; if (padCur.x >= canvas.width - 2 && pad.lx > 0) cam.x += edgePan * pad.lm;
+    if (padCur.y <= 2 && pad.ly < 0) cam.y -= edgePan * pad.lm; if (padCur.y >= canvas.height - 2 && pad.ly > 0) cam.y += edgePan * pad.lm;
+    padCur.x = P.clamp(padCur.x, 0, canvas.width); padCur.y = P.clamp(padCur.y, 0, canvas.height);
+    if (pad.pressed(PB.L3)) { padCur.x = canvas.width / 2; padCur.y = canvas.height / 2; }
+    mouse.x = padCur.x; mouse.y = padCur.y;
+    // right stick pans, triggers zoom
+    cam.x += pad.rx * 620 / cam.zoom * dt; cam.y += pad.ry * 620 / cam.zoom * dt;
+    const zt = pad.rt - pad.lt;
+    if (Math.abs(zt) > 0.05) cam.tz = P.clamp(cam.tz * (1 + zt * dt * 2.4), 0.9, 16);
+
+    const w = toWorld(padCur.x, padCur.y);
+    if (pad.pressed(PB.A)) {
+      audio.init();
+      if (tool === 'barricade' || tool === 'barrier') mouse.drag = { x: w.x, y: w.y };
+      else primary(w.x, w.y);
+    }
+    if (pad.released(PB.A) && mouse.drag) { placeLine(mouse.drag, w); mouse.drag = null; }
+    if (pad.pressed(PB.B)) { if (world.side === S.POLICE) orderSel(w.x, w.y, false); else pickTool('march'); }
+    if (pad.pressed(PB.X)) {
+      if (world.side === S.POLICE) {
+        let best = -1, bd = 25;
+        for (let i = 0; i < world.crowd.n; i++) {
+          if (world.crowd.kind[i] !== K.POL) continue;
+          const d = (world.crowd.x[i] - w.x) ** 2 + (world.crowd.y[i] - w.y) ** 2;
+          if (d < bd) { bd = d; best = world.crowd.grp[i]; }
+        }
+        if (best >= 0) { selSquad = best; audio.play('ui'); } else tip('No squad under the cursor');
+      } else { selBloc = (selBloc + 1) % world.blocs.length; audio.play('ui'); }
+    }
+    if (pad.pressed(PB.Y)) {
+      if (world.side === S.POLICE) selSquad = (selSquad + 1) % world.squads.length;
+      else selBloc = (selBloc + 1) % world.blocs.length;
+      centerSel(); audio.play('ui');
+    }
+    if (pad.pressed(PB.LB)) cycleTool(-1);
+    if (pad.pressed(PB.RB)) cycleTool(1);
+    if (pad.pressed(PB.UP)) pickTool(world.side === S.PROTEST ? 'mobilise' : 'reinforce');
+    if (pad.pressed(PB.DOWN) || pad.pressed(PB.R3)) centerSel();
+    if (pad.pressed(PB.LEFT) || pad.pressed(PB.RIGHT)) {
+      const d = pad.pressed(PB.LEFT) ? -1 : 1;
+      if (world.side === S.POLICE) selSquad = (selSquad + d + world.squads.length) % world.squads.length;
+      else selBloc = (selBloc + d + world.blocs.length) % world.blocs.length;
+      audio.play('ui');
+    }
+  }
+  const PAD_HINTS = {
+    protest: 'A: act · B: march · X: next bloc · Y: jump to bloc · LB/RB: tool · Up: mobilise · LT/RT: zoom · Right stick: pan · Start: pause',
+    police: 'A: select / act · B: form line · X: pick squad · Y: next squad · LB/RB: tool · Up: reinforce · LT/RT: zoom · Right stick: pan · Start: pause',
+  };
+  function pollPad(dt) {
+    pad.poll(dt);
+    if (pad.connected && pad.any) lastInput = 'pad';
+    const on = pad.connected && lastInput === 'pad';
+    document.body.classList.toggle('pad', on);
+    const st = $('padStatus');
+    if (st) st.textContent = pad.connected ? pad.id.replace(/\s*\(.*$/, '').slice(0, 40) : 'None — press a button on it';
+    const inGame = !!world && !current;
+    $('padCursor').classList.toggle('hidden', !(on && inGame));
+    $('padHints').classList.toggle('hidden', !(on && inGame));
+    if (!pad.connected) return;
+    if (current) { if (on) menuPad(); }
+    else if (world) {
+      gamePad(dt);
+      $('padCursor').style.transform = `translate(${padCur.x}px, ${padCur.y}px)`;
+      $('padHints').textContent = PAD_HINTS[world.side];
+    }
+  }
+  // The Guide/Home button opens a system overlay that steals focus: pause rather than run unseen.
+  function autoPause() { if (world && !paused && !world.result && !current) togglePause(); }
+  addEventListener('blur', autoPause);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
+
   function cycleSpeed() { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('btnSpeed').textContent = speed + '×'; }
   $('btnPause').onclick = (e) => { e.stopPropagation(); togglePause(); };
   $('btnSpeed').onclick = (e) => { e.stopPropagation(); cycleSpeed(); };
@@ -505,12 +674,13 @@
       switch (e.type) {
         case 'ignite':
           if (camDist(e.x, e.y) < 120 && Math.random() < 0.5) audio.play('ignite', camDist(e.x, e.y));
+          if (lastInput === 'pad' && camDist(e.x, e.y) < 60) pad.rumble(120, 0.25, 0.5);
           $('carsBadge').classList.remove('bump'); void $('carsBadge').offsetWidth; $('carsBadge').classList.add('bump');
           if (world.stats.burned === 1) unlock('FIRST_FIRE');
           if (world.stats.burned >= 100) unlock('CENT');
           if (e.by === 'spread') captionOnce('spread', 'IT\'S', 'CATCHING');
           break;
-        case 'capture': audio.play(world.side === S.PROTEST ? 'capture' : 'lost'); caption('PLACE DE LA', e.name.toUpperCase(), 2.4); break;
+        case 'capture': if (lastInput === 'pad') pad.rumble(350, 0.8, 0.4); audio.play(world.side === S.PROTEST ? 'capture' : 'lost'); caption('PLACE DE LA', e.name.toUpperCase(), 2.4); break;
         case 'retake': audio.play(world.side === S.PROTEST ? 'lost' : 'capture'); break;
         case 'gas': if (world.side === S.PROTEST) audio.play('gas', camDist(e.x, e.y)); break;
         case 'fireworks': if (world.side === S.POLICE) audio.play('firework', camDist(e.x, e.y)); break;
@@ -619,6 +789,7 @@
     requestAnimationFrame(frame);
     let dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    pollPad(dt);
     if (!world) { drawMenuBackdrop(dt); return; }
 
     // camera
@@ -683,5 +854,5 @@
   requestAnimationFrame(frame);
 
   // test hook (used by the smoke test; harmless in game)
-  P.debug = { get world() { return world; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
+  P.debug = { get world() { return world; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
 })();

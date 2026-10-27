@@ -1,6 +1,7 @@
 # Steam store kit — PAVÉ: Paris Riot Manager
 
 **Price:** $4.99 USD (launch discount 10–15%).
+**Controller:** Full Controller Support (declare it on the store page).
 **Genres / tags:** Strategy, Simulation, Real-Time Strategy, Sandbox, City, Physics, Top-Down, Indie, Singleplayer, Destruction.
 
 ## Short description
