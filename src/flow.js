@@ -38,7 +38,7 @@
       }
       heap[i] = key;
     };
-    const blocked = (k) => solid[k] || (roadOnly && tile[k] !== 0 && tile[k] !== 2 && tile[k] !== 1);
+    const blocked = (k) => solid[k] || (roadOnly && tile[k] !== 0 && tile[k] !== 2 && tile[k] !== 1 && tile[k] !== 7); // road, plaza, sidewalk, bridge
     for (const s of this.sources) {
       if (s < 0 || s >= N || blocked(s)) continue;
       if (dist[s] !== 0) { dist[s] = 0; push(s); }

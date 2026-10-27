@@ -12,7 +12,7 @@
     const sizeMul = settings.crowdScale || 1;
     this.pop = Math.round(level.pop * sizeMul);
     const map = (this.map = P.generateMap({ w: level.w || 320, h: level.h || 320, seed: this.seed,
-      landmarks: level.landmarks, names: level.names, carRate: level.carRate }));
+      landmarks: level.landmarks, names: level.names, carRate: level.carRate, style: level.style }));
     if (level.names) map.landmarks.forEach((lm, i) => { if (level.names[i]) lm.name = level.names[i]; });
     this.cap = Math.max(4000, Math.min(settings.maxAgents || 120000, Math.round(this.pop * 1.6) + 2000));
     this.crowd = new P.Crowd(this.cap, map.W, map.H, this.seed * 7919);
@@ -186,18 +186,22 @@
       sq.charge = 8; sq.cx = x; sq.cy = y;
     } else sq.charge = 0;
     sq.field.compute(P.discSources(map, x, y, 2.5));
-    // orientation: span the narrow axis of the street
-    const eh = map.extent(x, y, 1, 0, 30), ev = map.extent(x, y, 0, 1, 30);
-    const wh = eh.a + eh.b + 1, wv = ev.a + ev.b + 1;
-    let ux, uy, span, cx = x, cy = y;
-    // facing: toward the protest centroid nearest to us
+    // orientation: span the narrowest crossing of the street, at whatever angle it runs
     let fx = (this.protCx || map.W / 2) - x, fy = (this.protCy || map.H / 2) - y;
     const bl = this.nearestBloc(x, y);
     if (bl) { fx = bl.cx - x; fy = bl.cy - y; }
     const fm = Math.hypot(fx, fy) || 1; fx /= fm; fy /= fm;
-    if (wh >= 30 && wv >= 30) { ux = -fy; uy = fx; span = 22; }
-    else if (wh <= wv) { ux = 1; uy = 0; span = wh; cx = x + (eh.b - eh.a) / 2; fy = fy >= 0 ? 1 : -1; fx = 0; }
-    else { ux = 0; uy = 1; span = wv; cy = y + (ev.b - ev.a) / 2; fx = fx >= 0 ? 1 : -1; fy = 0; }
+    const cl = map.crossLine(x, y, 30);
+    let ux, uy, span, cx = x, cy = y;
+    if (cl.span >= 30) { ux = -fy; uy = fx; span = 22; } // open square: face the crowd
+    else {
+      ux = cl.ux; uy = cl.uy; span = cl.span;
+      cx = x + ux * (cl.b - cl.a) / 2; cy = y + uy * (cl.b - cl.a) / 2;
+      // face along the street, toward the crowd's side
+      let nx = -uy, ny = ux;
+      if (nx * fx + ny * fy < 0) { nx = -nx; ny = -ny; }
+      fx = nx; fy = ny;
+    }
     sq.ux = ux; sq.uy = uy; sq.nx = fx; sq.ny = fy;
     const sp = 0.86;
     const cols = Math.max(4, Math.min(sq.size, Math.floor((span - 0.6) / sp)));
@@ -469,7 +473,9 @@
       const f = tr.field;
       if (tr.state === 'go' || tr.state === 'back') {
         const d = f.dist[t];
-        if (tr.state === 'go' && d <= 55) { tr.state = 'spray'; continue; }
+        // arrive by distance to the fire itself (the road can stop short of a car parked on a lane)
+        const tc = tr.state === 'go' ? cars[tr.car] : null;
+        if (tc && (Math.hypot(tc.cx - tr.x, tc.cy - tr.y) < 8 || d <= 20)) { tr.state = 'spray'; continue; }
         if (tr.state === 'back' && d <= 25) { tr.done = true; continue; }
         if (d === P.INF) { // cut off: re-route
           tr.stuck = (tr.stuck || 0) + dt;
@@ -490,7 +496,7 @@
         let any = false;
         for (const c of cars) {
           if (c.state !== 1) continue;
-          if (Math.hypot(c.cx - tr.x, c.cy - tr.y) < 9) { c.spray = 0.3; any = true; tr.sprayAt = c; }
+          if (Math.hypot(c.cx - tr.x, c.cy - tr.y) < 12) { c.spray = 0.3; any = true; tr.sprayAt = c; }
         }
         tr.spray = any ? 1 : 0;
         if (!any) {

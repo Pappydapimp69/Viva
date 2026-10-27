@@ -140,9 +140,8 @@
         const mx = (best.sq.ax + best.b.cx) / 2, my = (best.sq.ay + best.b.cy) / 2;
         const o = map.nearestOpen(mx, my, 6);
         if (o) {
-          const eh = map.extent(o.x, o.y, 1, 0, 14), ev = map.extent(o.x, o.y, 0, 1, 14);
-          if (eh.a + eh.b < ev.a + ev.b) w.placeBarricade(o.x - eh.a, o.y, o.x + eh.b, o.y, 1, 28);
-          else w.placeBarricade(o.x, o.y - ev.a, o.x, o.y + ev.b, 1, 28);
+          const cl = map.crossLine(o.x, o.y, 14);
+          if (cl.span < 28) w.placeBarricade(o.x - cl.ux * cl.a, o.y - cl.uy * cl.a, o.x + cl.ux * cl.b, o.y + cl.uy * cl.b, 1, 28);
         }
       }
     }

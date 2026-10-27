@@ -115,7 +115,7 @@
     audio.init();
     levelIdx = -1;
     start(P.sandboxLevel({ side: $('sbSide').value, pop: +$('sbPop').value, size: +$('sbSize').value,
-      squads: +$('sbSq').value, night: $('sbNight').value === '1', seed: +$('sbSeed').value || 1 }), true);
+      squads: +$('sbSq').value, night: $('sbNight').value === '1', seed: +$('sbSeed').value || 1, style: $('sbStyle').value }), true);
   };
 
   function loadSettingsUI() {
@@ -536,43 +536,58 @@
     if (world.side === S.PROTEST) { const b = world.blocs[selBloc]; if (b && b.n) { cam.x = b.cx; cam.y = b.cy; } }
     else { const sq = world.squads[selSquad]; if (sq) { cam.x = sq.ax; cam.y = sq.ay; } }
   }
+  // Console-RTS controls: the reticle stays at screen centre and the left stick
+  // moves the camera; the reticle snaps to the nearest useful target for the tool.
+  let padSnap = null;
+  function snapTarget(wx, wy, radius) {
+    let best = null, bd = radius * radius;
+    const consider = (x, y, kind, ref) => { const d = (x - wx) ** 2 + (y - wy) ** 2; if (d < bd) { bd = d; best = { x, y, kind, ref }; } };
+    if (world.side === S.POLICE) {
+      if (tool === 'truck') { for (const c of world.map.cars) if (c.state === 1) consider(c.cx, c.cy, 'fire', c); }
+      else if (tool === 'move' || tool === 'charge') world.squads.forEach((sq, i) => { if (i !== selSquad || tool === 'move') consider(sq.ax, sq.ay, 'squad', i); });
+      if (tool === 'charge' || tool === 'gas') {
+        const cr = world.crowd; // nearest casseur cluster point
+        for (let i = 0; i < cr.n; i += 3) if (cr.kind[i] === K.CASS) consider(cr.x[i], cr.y[i], 'casseur', null);
+      }
+    } else {
+      if (tool === 'march') for (const lm of world.map.landmarks) consider(lm.x, lm.y, 'landmark', lm);
+      if (tool === 'fireworks') world.squads.forEach((sq, i) => consider(sq.ax, sq.ay, 'squad', i));
+      if (tool === 'casseurs') world.blocs.forEach((b) => { if (b.n > 50) consider(b.cx, b.cy, 'bloc', b); });
+    }
+    return best;
+  }
   function gamePad(dt) {
     if (pad.pressed(PB.START)) { togglePause(); return; }
     if (pad.pressed(PB.BACK)) cycleSpeed();
     if (paused) return;
-    // virtual cursor on the left stick, with a response curve for fine aim
-    if (!padCur.init) { padCur.x = canvas.width / 2; padCur.y = canvas.height / 2; padCur.init = true; }
-    const sp = 1150 * Math.pow(pad.lm, 1.7) * dt;
-    if (pad.lm > 0) { padCur.x += pad.lx / pad.lm * sp; padCur.y += pad.ly / pad.lm * sp; }
-    const edgePan = 520 / cam.zoom * dt;
-    if (padCur.x <= 2 && pad.lx < 0) cam.x -= edgePan * pad.lm; if (padCur.x >= canvas.width - 2 && pad.lx > 0) cam.x += edgePan * pad.lm;
-    if (padCur.y <= 2 && pad.ly < 0) cam.y -= edgePan * pad.lm; if (padCur.y >= canvas.height - 2 && pad.ly > 0) cam.y += edgePan * pad.lm;
-    padCur.x = P.clamp(padCur.x, 0, canvas.width); padCur.y = P.clamp(padCur.y, 0, canvas.height);
-    if (pad.pressed(PB.L3)) { padCur.x = canvas.width / 2; padCur.y = canvas.height / 2; }
+    padCur.x = canvas.width / 2; padCur.y = canvas.height / 2; padCur.init = true;
     mouse.x = padCur.x; mouse.y = padCur.y;
-    // right stick pans, triggers zoom
-    cam.x += pad.rx * 620 / cam.zoom * dt; cam.y += pad.ry * 620 / cam.zoom * dt;
-    const zt = pad.rt - pad.lt;
+    const c = toWorld(padCur.x, padCur.y);
+    padSnap = snapTarget(c.x, c.y, 34 / cam.zoom + 2);
+    // pan: response curve for fine aim, sticky (slower) while hovering a target
+    const sticky = padSnap && pad.lm < 0.7 ? 0.45 : 1;
+    const sp = 1100 * Math.pow(pad.lm, 1.6) * sticky / cam.zoom * dt;
+    if (pad.lm > 0) { cam.x += pad.lx / pad.lm * sp; cam.y += pad.ly / pad.lm * sp; }
+    // right stick: vertical zooms, triggers zoom too
+    const zt = (pad.rt - pad.lt) - pad.ry;
     if (Math.abs(zt) > 0.05) cam.tz = P.clamp(cam.tz * (1 + zt * dt * 2.4), 0.9, 16);
+    if (Math.abs(pad.rx) > 0.05) cam.x += pad.rx * 400 / cam.zoom * dt;
 
-    const w = toWorld(padCur.x, padCur.y);
+    const w = padSnap ? { x: padSnap.x, y: padSnap.y } : c;
     if (pad.pressed(PB.A)) {
       audio.init();
-      if (tool === 'barricade' || tool === 'barrier') mouse.drag = { x: w.x, y: w.y };
+      if (tool === 'barricade' || tool === 'barrier') mouse.drag = { x: c.x, y: c.y };
+      else if (padSnap && padSnap.kind === 'squad' && tool === 'move') { selSquad = padSnap.ref; audio.play('ui'); tip(world.squads[selSquad].name + ' selected — move and press A to place the line'); }
       else primary(w.x, w.y);
     }
-    if (pad.released(PB.A) && mouse.drag) { placeLine(mouse.drag, w); mouse.drag = null; }
-    if (pad.pressed(PB.B)) { if (world.side === S.POLICE) orderSel(w.x, w.y, false); else pickTool('march'); }
-    if (pad.pressed(PB.X)) {
-      if (world.side === S.POLICE) {
-        let best = -1, bd = 25;
-        for (let i = 0; i < world.crowd.n; i++) {
-          if (world.crowd.kind[i] !== K.POL) continue;
-          const d = (world.crowd.x[i] - w.x) ** 2 + (world.crowd.y[i] - w.y) ** 2;
-          if (d < bd) { bd = d; best = world.crowd.grp[i]; }
-        }
-        if (best >= 0) { selSquad = best; audio.play('ui'); } else tip('No squad under the cursor');
-      } else { selBloc = (selBloc + 1) % world.blocs.length; audio.play('ui'); }
+    if (pad.released(PB.A) && mouse.drag) { placeLine(mouse.drag, c); mouse.drag = null; }
+    // B cancels: drop a barricade being drawn, else go back to the default tool
+    if (pad.pressed(PB.B)) {
+      if (mouse.drag) mouse.drag = null;
+      else pickTool(world.side === S.PROTEST ? 'march' : 'move');
+    }
+    if (pad.pressed(PB.X)) { // jump the camera to the selection
+      centerSel(); audio.play('ui');
     }
     if (pad.pressed(PB.Y)) {
       if (world.side === S.POLICE) selSquad = (selSquad + 1) % world.squads.length;
@@ -582,17 +597,30 @@
     if (pad.pressed(PB.LB)) cycleTool(-1);
     if (pad.pressed(PB.RB)) cycleTool(1);
     if (pad.pressed(PB.UP)) pickTool(world.side === S.PROTEST ? 'mobilise' : 'reinforce');
-    if (pad.pressed(PB.DOWN) || pad.pressed(PB.R3)) centerSel();
+    if (pad.pressed(PB.DOWN) || pad.pressed(PB.R3)) {
+      // jump to the hottest spot: the biggest fire, or the landmark under most pressure
+      let best = null, bv = -1;
+      for (const cc of world.map.cars) if (cc.state === 1 && cc.burn > bv) { bv = cc.burn; best = cc; }
+      if (best) { cam.x = best.cx; cam.y = best.cy; }
+      else { const lm = world.map.landmarks.reduce((a, l) => (Math.abs(l.control) > Math.abs(a.control) ? l : a)); cam.x = lm.x; cam.y = lm.y; }
+    }
     if (pad.pressed(PB.LEFT) || pad.pressed(PB.RIGHT)) {
       const d = pad.pressed(PB.LEFT) ? -1 : 1;
       if (world.side === S.POLICE) selSquad = (selSquad + d + world.squads.length) % world.squads.length;
       else selBloc = (selBloc + d + world.blocs.length) % world.blocs.length;
       audio.play('ui');
     }
+    // reticle label: what A will do right now
+    const t = tools().find((x) => x.id === tool);
+    let label = t ? t.name : '';
+    if (padSnap) label += ' · ' + (padSnap.kind === 'squad' ? world.squads[padSnap.ref].name : padSnap.kind === 'landmark' ? padSnap.ref.name : padSnap.kind === 'fire' ? 'FIRE' : padSnap.kind === 'bloc' ? 'BLOC' : 'CASSEURS');
+    else if (mouse.drag) label += ' · release A to build';
+    $('padLabel').textContent = label;
+    $('padCursor').classList.toggle('snap', !!padSnap);
   }
   const PAD_HINTS = {
-    protest: 'A: act · B: march · X: next bloc · Y: jump to bloc · LB/RB: tool · Up: mobilise · LT/RT: zoom · Right stick: pan · Start: pause',
-    police: 'A: select / act · B: form line · X: pick squad · Y: next squad · LB/RB: tool · Up: reinforce · LT/RT: zoom · Right stick: pan · Start: pause',
+    protest: 'Left stick: move · A: do it · B: cancel · LB/RB: tool · Y: next bloc · X: go to bloc · Down: hot spot · Up: mobilise · Right stick / triggers: zoom · Start: pause',
+    police: 'Left stick: move · A: select squad / do it · B: cancel · LB/RB: tool · Y: next squad · X: go to squad · Down: hot spot · Up: reinforce · Right stick / triggers: zoom · Start: pause',
   };
   function pollPad(dt) {
     pad.poll(dt);
@@ -603,12 +631,14 @@
     if (st) st.textContent = pad.connected ? pad.id.replace(/\s*\(.*$/, '').slice(0, 40) : 'None — press a button on it';
     const inGame = !!world && !current;
     $('padCursor').classList.toggle('hidden', !(on && inGame));
+    $('padLabel').classList.toggle('hidden', !(on && inGame));
     $('padHints').classList.toggle('hidden', !(on && inGame));
     if (!pad.connected) return;
     if (current) { if (on) menuPad(); }
     else if (world) {
       gamePad(dt);
       $('padCursor').style.transform = `translate(${padCur.x}px, ${padCur.y}px)`;
+      $('padLabel').style.transform = `translate(${padCur.x}px, ${padCur.y + 26}px) translateX(-50%)`;
       $('padHints').textContent = PAD_HINTS[world.side];
     }
   }
@@ -807,7 +837,9 @@
     cam.zoom += (cam.tz - cam.zoom) * Math.min(1, dt * 12);
     const after = toWorld(mouse.x, mouse.y);
     cam.x += before.x - after.x; cam.y += before.y - after.y;
-    const hw = canvas.width / 2 / cam.zoom, hh = canvas.height / 2 / cam.zoom;
+    // with a pad the reticle is the screen centre, so let the centre reach the map edge
+    const padMode = lastInput === 'pad';
+    const hw = padMode ? 0 : canvas.width / 2 / cam.zoom, hh = padMode ? 0 : canvas.height / 2 / cam.zoom;
     cam.x = hw * 2 >= world.map.W ? world.map.W / 2 : P.clamp(cam.x, hw, world.map.W - hw);
     cam.y = hh * 2 >= world.map.H ? world.map.H / 2 : P.clamp(cam.y, hh, world.map.H - hh);
 
@@ -854,5 +886,5 @@
   requestAnimationFrame(frame);
 
   // test hook (used by the smoke test; harmless in game)
-  P.debug = { get world() { return world; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
+  P.debug = { get world() { return world; }, get padSnap() { return padSnap; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
 })();

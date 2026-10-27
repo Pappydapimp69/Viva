@@ -93,49 +93,86 @@
     const img = g.createImageData(W * TS, H * TS), d = new Uint32Array(img.data.buffer);
     const tile = map.tile;
 
-    // lots: subdivide building blocks into rectangles with their own roof tint
+    // lots: each building block is split on its own bounds (not one global grid),
+    // and every district has its own roof palette and building height
     const lot = new Int32Array(W * H).fill(-1);
     let lotN = 0;
-    const roof = ['#8b929a', '#7d848c', '#979da4', '#8a847b', '#a0998d', '#777e86', '#8f949c', '#6f757d', '#9a948b'];
+    const PALETTES = [
+      ['#8b929a', '#7d848c', '#979da4', '#8f949c', '#6f757d', '#858c95'],   // zinc
+      ['#a39a8a', '#b0a796', '#988f80', '#a8a08f', '#8f877a', '#b8b0a0'],   // Haussmann stone
+      ['#5f646b', '#6a6f77', '#575c63', '#70757c', '#62666c', '#4e5359'],   // dark slate
+      ['#a7735a', '#9a6b55', '#b07f63', '#8e6450', '#a87a62', '#97705c'],   // tile roofs
+      ['#b8bcbf', '#c4c7c9', '#aeb2b5', '#bfc3c5', '#a5a9ac', '#cdd0d2'],   // modern flat
+    ];
     const R = P.rng(map.seed * 13 + 5);
-    function split(x0, y0, x1, y1, depth) {
-      const w = x1 - x0, h = y1 - y0;
-      if ((w <= 12 && h <= 12) || depth > 7) {
-        const id = lotN++;
-        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (tile[y * W + x] === T.BUILDING) lot[y * W + x] = id;
-        return;
+    // mostly zinc and stone, like Paris; slate sometimes, tile and modern roofs rarely
+    const WEIGHTED = [0, 0, 0, 1, 1, 1, 2, 2, 4, 3];
+    const distPal = [];
+    for (let d = 0; d < 16; d++) distPal.push(PALETTES[WEIGHTED[Math.floor(hash(d, map.seed, 7) * WEIGHTED.length)]]);
+    const palOf = (k) => distPal[(map.district ? map.district[k] : 0) % 16];
+    const lotH = [], lotCol = [];
+    {
+      const seen = new Uint8Array(W * H), st = new Int32Array(W * H);
+      const split = (x0, y0, x1, y1, depth, pal) => {
+        const w = x1 - x0, h = y1 - y0, lim = R.int(7, 15);
+        if ((w <= lim && h <= lim) || depth > 9) {
+          const id = lotN++;
+          lotH.push(R() < 0.18 ? 2 : R() < 0.1 ? 0.6 : 1);
+          let col = null;
+          for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+            const k = y * W + x;
+            if (tile[k] === T.BUILDING && lot[k] < 0) { lot[k] = id; if (!col) col = hexToRgb(R.pick(palOf(k))); }
+          }
+          lotCol[id] = col || [130, 135, 140];
+          return;
+        }
+        if (w > h) { const m = x0 + Math.max(4, Math.min(w - 4, Math.round(w * R.range(0.3, 0.7)))); split(x0, y0, m, y1, depth + 1); split(m, y0, x1, y1, depth + 1); }
+        else { const m = y0 + Math.max(4, Math.min(h - 4, Math.round(h * R.range(0.3, 0.7)))); split(x0, y0, x1, m, depth + 1); split(x0, m, x1, y1, depth + 1); }
+      };
+      for (let i = 0; i < W * H; i++) {
+        if (tile[i] !== T.BUILDING || seen[i]) continue;
+        let sp = 0, x0 = W, y0 = H, x1 = 0, y1 = 0; st[sp++] = i; seen[i] = 1;
+        while (sp) {
+          const k = st[--sp], x = k % W, y = (k - x) / W;
+          if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y;
+          if (x > 0 && tile[k - 1] === T.BUILDING && !seen[k - 1]) { seen[k - 1] = 1; st[sp++] = k - 1; }
+          if (x < W - 1 && tile[k + 1] === T.BUILDING && !seen[k + 1]) { seen[k + 1] = 1; st[sp++] = k + 1; }
+          if (y > 0 && tile[k - W] === T.BUILDING && !seen[k - W]) { seen[k - W] = 1; st[sp++] = k - W; }
+          if (y < H - 1 && tile[k + W] === T.BUILDING && !seen[k + W]) { seen[k + W] = 1; st[sp++] = k + W; }
+        }
+        split(x0, y0, x1 + 1, y1 + 1, 0);
       }
-      if (w > h) { const m = x0 + Math.max(5, Math.min(w - 5, Math.round(w * R.range(0.35, 0.65)))); split(x0, y0, m, y1, depth + 1); split(m, y0, x1, y1, depth + 1); }
-      else { const m = y0 + Math.max(5, Math.min(h - 5, Math.round(h * R.range(0.35, 0.65)))); split(x0, y0, x1, m, depth + 1); split(x0, m, x1, y1, depth + 1); }
+      for (let k = 0; k < W * H; k++) if (tile[k] === T.BUILDING && lot[k] < 0) { lot[k] = lotN++; lotCol.push(hexToRgb(palOf(k)[0])); lotH.push(1); }
     }
-    split(0, 0, W, H, 0);
-    const lotCol = [];
-    for (let i = 0; i < lotN; i++) lotCol.push(hexToRgb(R.pick(roof)));
 
     const base = {}; base[T.ROAD] = [86, 90, 95]; base[T.SIDEWALK] = [158, 153, 145]; base[T.PLAZA] = [178, 170, 156];
-    base[T.PARK] = [92, 104, 62]; base[T.MONUMENT] = [200, 192, 176];
+    base[T.PARK] = [92, 104, 62]; base[T.MONUMENT] = [200, 192, 176]; base[T.WATER] = [58, 86, 92]; base[T.BRIDGE] = [150, 143, 130];
+    base[T.COURT] = [122, 118, 110];
     const PW = W * TS;
+    const isB = (t) => t === T.BUILDING;
     for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
       const k = ty * W + tx, tt = tile[k];
-      let c = tt === T.BUILDING ? lotCol[lot[k]] || [130, 135, 140] : base[tt];
-      // courtyard / lot edge darkening
+      let c = tt === T.BUILDING ? lotCol[lot[k]] || [130, 135, 140] : base[tt] || [120, 120, 120];
       let edge = false, rim = false;
       if (tt === T.BUILDING) {
         const l = tx > 0 ? lot[k - 1] : -2, u = ty > 0 ? lot[k - W] : -2;
         edge = l !== lot[k] || u !== lot[k];
-        rim = (tx > 0 && tile[k - 1] !== T.BUILDING) || (ty > 0 && tile[k - W] !== T.BUILDING) ||
-          (tx < W - 1 && tile[k + 1] !== T.BUILDING) || (ty < H - 1 && tile[k + W] !== T.BUILDING);
+        rim = (tx > 0 && !isB(tile[k - 1])) || (ty > 0 && !isB(tile[k - W])) || (tx < W - 1 && !isB(tile[k + 1])) || (ty < H - 1 && !isB(tile[k + W]));
       }
+      const nearWater = tt !== T.WATER && ((tx > 0 && tile[k - 1] === T.WATER) || (tx < W - 1 && tile[k + 1] === T.WATER) || (ty > 0 && tile[k - W] === T.WATER) || (ty < H - 1 && tile[k + W] === T.WATER));
       for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) {
         const X = tx * TS + px, Y = ty * TS + py;
-        const n = (hash(X, Y, 1) - 0.5) * (tt === T.ROAD ? 10 : tt === T.PARK ? 18 : 8);
+        const n = (hash(X, Y, 1) - 0.5) * (tt === T.ROAD ? 10 : tt === T.PARK ? 18 : tt === T.WATER ? 6 : 8);
         let r = c[0] + n, gg = c[1] + n, b = c[2] + n;
         if (tt === T.PLAZA && ((X >> 2) + (Y >> 2)) % 2 === 0) { r -= 6; gg -= 6; b -= 6; }
+        if (tt === T.WATER) { const w = Math.sin(X * 0.18 + Math.sin(Y * 0.07) * 3) * 6; r += w; gg += w; b += w * 1.3; }
+        if (tt === T.COURT) { r -= 10; gg -= 10; b -= 8; }
+        if (nearWater) { r = 196 + n; gg = 188 + n; b = 170 + n; } // quay / bridge parapet
         if (tt === T.BUILDING) {
           if (edge && ((px === 0 && tx > 0 && lot[k - 1] !== lot[k]) || (py === 0 && ty > 0 && lot[k - W] !== lot[k]))) { r -= 28; gg -= 28; b -= 26; }
           if (rim) {
-            const out = (px === 0 && tx > 0 && tile[k - 1] !== T.BUILDING) || (py === 0 && ty > 0 && tile[k - W] !== T.BUILDING) ||
-              (px === TS - 1 && tx < W - 1 && tile[k + 1] !== T.BUILDING) || (py === TS - 1 && ty < H - 1 && tile[k + W] !== T.BUILDING);
+            const out = (px === 0 && tx > 0 && !isB(tile[k - 1])) || (py === 0 && ty > 0 && !isB(tile[k - W])) ||
+              (px === TS - 1 && tx < W - 1 && !isB(tile[k + 1])) || (py === TS - 1 && ty < H - 1 && !isB(tile[k + W]));
             if (out) { r += 45; gg += 45; b += 45; }
           }
         }
@@ -144,83 +181,95 @@
     }
     g.putImageData(img, 0, 0);
 
-    // building shadows (cast down-right) onto the ground
-    const mask = makeCanvas(W * TS, H * TS), mg = mask.getContext('2d');
-    mg.fillStyle = '#000';
-    for (let ty = 0; ty < H; ty++) {
-      let run = -1;
-      for (let tx = 0; tx <= W; tx++) {
-        const b = tx < W && tile[ty * W + tx] === T.BUILDING;
-        if (b && run < 0) run = tx;
-        if (!b && run >= 0) { mg.fillRect(run * TS, ty * TS, (tx - run) * TS, TS); run = -1; }
+    // shadows: taller lots cast longer shadows, so skylines read as uneven
+    for (const hClass of [0.6, 1, 2]) {
+      const mask = makeCanvas(W * TS, H * TS), mg = mask.getContext('2d');
+      mg.fillStyle = '#000';
+      let any = false;
+      for (let ty = 0; ty < H; ty++) {
+        let run = -1;
+        for (let tx = 0; tx <= W; tx++) {
+          const k = ty * W + tx;
+          const b = tx < W && tile[k] === T.BUILDING && lotH[lot[k]] === hClass;
+          if (b && run < 0) run = tx;
+          if (!b && run >= 0) { mg.fillRect(run * TS, ty * TS, (tx - run) * TS, TS); run = -1; any = true; }
+        }
       }
+      if (!any) continue;
+      const shadow = makeCanvas(W * TS, H * TS), sg = shadow.getContext('2d');
+      sg.drawImage(mask, TS * 1.4 * hClass, TS * 2.0 * hClass);
+      sg.globalCompositeOperation = 'destination-out';
+      // shadows never fall on roofs of equal-or-taller neighbours: cut every building out
+      const all = makeCanvas(W * TS, H * TS), ag = all.getContext('2d');
+      ag.fillStyle = '#000';
+      for (let ty = 0; ty < H; ty++) { let run = -1; for (let tx = 0; tx <= W; tx++) { const b = tx < W && tile[ty * W + tx] === T.BUILDING; if (b && run < 0) run = tx; if (!b && run >= 0) { ag.fillRect(run * TS, ty * TS, (tx - run) * TS, TS); run = -1; } } }
+      sg.drawImage(all, 0, 0);
+      g.globalAlpha = 0.36;
+      g.drawImage(shadow, 0, 0);
+      g.globalAlpha = 1;
     }
-    // draw shadow, then re-stamp roofs on top by masking with destination-over trick
-    const shadow = makeCanvas(W * TS, H * TS), sg = shadow.getContext('2d');
-    sg.drawImage(mask, TS * 1.6, TS * 2.2);
-    sg.globalCompositeOperation = 'destination-out';
-    sg.drawImage(mask, 0, 0);
-    g.globalAlpha = 0.38;
-    g.drawImage(shadow, 0, 0);
-    g.globalAlpha = 1;
 
-    // roof furniture: chimney stacks and skylights
+    // roof furniture: chimney stacks, skylights, rooftop gardens
     for (let i = 0; i < W * H / 14; i++) {
       const tx = R.int(1, W - 2), ty = R.int(1, H - 2), k = ty * W + tx;
       if (tile[k] !== T.BUILDING || tile[k - 1] !== T.BUILDING || tile[k + 1] !== T.BUILDING || tile[k - W] !== T.BUILDING || tile[k + W] !== T.BUILDING) continue;
-      if (R() < 0.6) { g.fillStyle = 'rgba(60,55,52,0.85)'; g.fillRect(tx * TS + 1, ty * TS + 1, TS * R.range(0.5, 1.4), TS * 0.6); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(tx * TS + 2, ty * TS + 1 + TS * 0.6, TS * 1.2, 2); }
-      else { g.fillStyle = 'rgba(190,205,215,0.5)'; g.fillRect(tx * TS, ty * TS, TS * 2, TS); }
+      const q = R();
+      if (q < 0.55) { g.fillStyle = 'rgba(60,55,52,0.85)'; g.fillRect(tx * TS + 1, ty * TS + 1, TS * R.range(0.5, 1.4), TS * 0.6); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(tx * TS + 2, ty * TS + 1 + TS * 0.6, TS * 1.2, 2); }
+      else if (q < 0.9) { g.fillStyle = 'rgba(190,205,215,0.5)'; g.fillRect(tx * TS, ty * TS, TS * R.range(1, 2.5), TS * R.range(0.6, 1.2)); }
+      else { g.fillStyle = 'rgba(80,110,60,0.7)'; g.fillRect(tx * TS, ty * TS, TS * 2, TS * 2); }
     }
 
-    // road markings
-    g.fillStyle = 'rgba(235,235,230,0.75)';
+    // road markings follow each street's own polyline, only where it is open road
+    const isRoadT = (x, y) => x >= 0 && y >= 0 && x < W && y < H && tile[(y | 0) * W + (x | 0)] === T.ROAD;
+    g.strokeStyle = 'rgba(235,235,230,0.75)'; g.lineWidth = 1.1; g.lineCap = 'butt';
     for (const s of map.streets) {
-      if (s.kind === 'd') continue;
-      const lanes = s.blvd ? [-0.17, 0.17] : [0];
-      for (const off of lanes) {
-        const c = s.c + off * s.w;
-        if (s.kind === 'v') {
-          for (let y = 0; y < H; y += 4) {
-            if (tile[y * W + (c | 0)] !== T.ROAD || tile[Math.min(H - 1, y + 2) * W + (c | 0)] !== T.ROAD) continue;
-            g.fillRect(c * TS - 0.5, y * TS, 1.2, TS * 2);
-          }
-        } else {
-          for (let x = 0; x < W; x += 4) {
-            if (tile[(c | 0) * W + x] !== T.ROAD || tile[(c | 0) * W + Math.min(W - 1, x + 2)] !== T.ROAD) continue;
-            g.fillRect(x * TS, c * TS - 0.5, TS * 2, 1.2);
-          }
+      if (s.w < 8) continue;
+      const offs = s.w >= 16 ? [-0.17, 0.17] : [0];
+      const p = s.pts;
+      for (let i = 0; i < p.length - 1; i++) {
+        const ax = p[i][0], ay = p[i][1], bx = p[i + 1][0], by = p[i + 1][1], L = Math.hypot(bx - ax, by - ay);
+        if (!L) continue;
+        const ux = (bx - ax) / L, uy = (by - ay) / L, nx = -uy, ny = ux;
+        for (const o of offs) for (let t = 0; t < L; t += 4) {
+          const x = ax + ux * t + nx * o * s.w, y = ay + uy * t + ny * o * s.w;
+          const x2 = x + ux * 2, y2 = y + uy * 2;
+          if (!isRoadT(x, y) || !isRoadT(x2, y2)) continue;
+          g.beginPath(); g.moveTo(x * TS, y * TS); g.lineTo(x2 * TS, y2 * TS); g.stroke();
+        }
+        // zebra crossing where a side street opens off this one
+        for (let t = 6; t < L - 2; t += 3) {
+          const x = ax + ux * t, y = ay + uy * t, hw = s.w / 2 + 0.6;
+          const openNow = isRoadT(x + nx * hw, y + ny * hw) || isRoadT(x - nx * hw, y - ny * hw);
+          const xb = x - ux * 4, yb = y - uy * 4;
+          const closedBefore = !isRoadT(xb + nx * hw, yb + ny * hw) && !isRoadT(xb - nx * hw, yb - ny * hw);
+          if (!openNow || !closedBefore || !isRoadT(xb, yb)) continue;
+          g.save(); g.translate(xb * TS, yb * TS); g.rotate(Math.atan2(uy, ux));
+          g.fillStyle = 'rgba(240,240,236,0.85)';
+          const inner = s.w / 2 - s.side;
+          for (let v = -inner + 0.5; v < inner - 0.5; v += 2) g.fillRect(-1.5 * TS, v * TS, 3 * TS, 0.9 * TS);
+          g.restore();
+          t += 12;
         }
       }
     }
-    // zebra crossings just outside intersections
-    g.fillStyle = 'rgba(240,240,236,0.85)';
-    const vs = map.streets.filter((s) => s.kind === 'v'), hs = map.streets.filter((s) => s.kind === 'h');
-    for (const v of vs) for (const h of hs) {
-      const vx0 = Math.round(v.c - v.w / 2) + v.side, vx1 = Math.round(v.c + v.w / 2) - v.side;
-      const hy0 = Math.round(h.c - h.w / 2), hy1 = Math.round(h.c + h.w / 2);
-      for (const yy of [hy0 - 4, hy1 + 1]) {
-        if (yy < 0 || yy + 3 >= H) continue;
-        if (tile[yy * W + ((vx0 + vx1) >> 1)] !== T.ROAD) continue;
-        for (let x = vx0; x < vx1; x += 2) if (tile[yy * W + x] === T.ROAD) g.fillRect(x * TS, yy * TS, TS * 0.9, TS * 3);
-      }
-      const hyr0 = Math.round(h.c - h.w / 2) + h.side, hyr1 = Math.round(h.c + h.w / 2) - h.side;
-      const vxa = Math.round(v.c - v.w / 2), vxb = Math.round(v.c + v.w / 2);
-      for (const xx of [vxa - 4, vxb + 1]) {
-        if (xx < 0 || xx + 3 >= W) continue;
-        if (tile[((hyr0 + hyr1) >> 1) * W + xx] !== T.ROAD) continue;
-        for (let y = hyr0; y < hyr1; y += 2) if (tile[y * W + xx] === T.ROAD) g.fillRect(xx * TS, y * TS, TS * 3, TS * 0.9);
-      }
-    }
-    // monuments
+    // monuments by landmark type
     for (const lm of map.landmarks) {
+      const x = lm.x * TS, y = lm.y * TS;
       g.fillStyle = 'rgba(0,0,0,0.25)';
-      g.beginPath(); g.arc((lm.x + 0.8) * TS, (lm.y + 1.2) * TS, 3 * TS, 0, 6.283); g.fill();
-      g.fillStyle = '#cfc6b4';
-      g.beginPath(); g.arc(lm.x * TS, lm.y * TS, 2.8 * TS, 0, 6.283); g.fill();
-      g.fillStyle = '#5f7d6a';
-      g.beginPath(); g.arc(lm.x * TS, lm.y * TS, 1.4 * TS, 0, 6.283); g.fill();
-      g.strokeStyle = 'rgba(80,72,60,0.35)'; g.lineWidth = 1;
-      for (let r = 6; r < lm.r; r += 3) { g.beginPath(); g.arc(lm.x * TS, lm.y * TS, r * TS, 0, 6.283); g.stroke(); }
+      g.beginPath(); g.arc(x + 0.8 * TS, y + 1.2 * TS, 3 * TS, 0, 6.283); g.fill();
+      if (lm.type === 'etoile') { // a triumphal arch seen from above
+        g.fillStyle = '#d8cfbd'; g.fillRect(x - 2.6 * TS, y - 1.6 * TS, 5.2 * TS, 3.2 * TS);
+        g.fillStyle = '#a99f8c'; g.fillRect(x - 0.7 * TS, y - 1.6 * TS, 1.4 * TS, 3.2 * TS);
+      } else if (lm.type === 'square') {
+        g.fillStyle = '#cfc6b4'; g.beginPath(); g.arc(x, y, 1.6 * TS, 0, 6.283); g.fill();
+        g.strokeStyle = 'rgba(220,214,196,0.6)'; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(x - 9 * TS, y); g.lineTo(x + 9 * TS, y); g.moveTo(x, y - 7 * TS); g.lineTo(x, y + 7 * TS); g.stroke();
+      } else {
+        g.fillStyle = '#cfc6b4'; g.beginPath(); g.arc(x, y, 2.8 * TS, 0, 6.283); g.fill();
+        g.fillStyle = '#5f7d6a'; g.beginPath(); g.arc(x, y, 1.4 * TS, 0, 6.283); g.fill();
+        g.strokeStyle = 'rgba(80,72,60,0.35)'; g.lineWidth = 1;
+        for (let r = 6; r < lm.r; r += 3) { g.beginPath(); g.arc(x, y, r * TS, 0, 6.283); g.stroke(); }
+      }
     }
 
     // tree canopy layer (drawn over the crowd): bare winter plane trees
@@ -252,7 +301,7 @@
     const mi = mmg.createImageData(W, H), md = new Uint32Array(mi.data.buffer);
     for (let k = 0; k < W * H; k++) {
       const tt = tile[k];
-      md[k] = tt === T.BUILDING ? abgr(70, 74, 80) : tt === T.PARK ? abgr(70, 86, 50) : tt === T.PLAZA ? abgr(150, 144, 132) : abgr(120, 122, 125);
+      md[k] = tt === T.BUILDING || tt === T.COURT ? abgr(70, 74, 80) : tt === T.PARK ? abgr(70, 86, 50) : tt === T.PLAZA ? abgr(150, 144, 132) : tt === T.WATER ? abgr(50, 80, 95) : abgr(120, 122, 125);
     }
     mmg.putImageData(mi, 0, 0);
     return { map: cv, trees: tc, mini: mm };

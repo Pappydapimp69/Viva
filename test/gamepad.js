@@ -50,23 +50,33 @@ const path = require('path');
   await until(() => PAVE.debug.world && PAVE.debug.screen === null, null, 8000);
   await p.waitForTimeout(300);
   await tap(13); // re-assert pad mode in game
-  ok(await p.evaluate(() => !document.getElementById('padCursor').classList.contains('hidden')), 'cursor visible in game');
-  const c0 = await p.evaluate(() => document.getElementById('padCursor').style.transform);
+  ok(await p.evaluate(() => !document.getElementById('padCursor').classList.contains('hidden')), 'reticle visible in game');
+  const cam0 = await p.evaluate(() => PAVE.debug.cam.x);
   await p.evaluate(() => { __pad.axes = [0.9, 0, 0, 0]; }); await p.waitForTimeout(400); await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; });
-  const c1 = await p.evaluate(() => document.getElementById('padCursor').style.transform);
-  ok(c0 !== c1, 'left stick moves the cursor');
+  ok(await p.evaluate((c) => PAVE.debug.cam.x > c + 2, cam0), 'left stick moves the camera');
   // RB cycles tool
   const t0 = await p.evaluate(() => PAVE.debug.tool); await tap(5); const t1 = await p.evaluate(() => PAVE.debug.tool);
   ok(t0 !== t1, 'RB changes tool ' + t0 + ' -> ' + t1);
   await tap(4); ok(await p.evaluate(() => PAVE.debug.tool) === t0, 'LB goes back');
-  // Y next squad, B orders it to the cursor
+  await tap(5); await tap(1); ok(await p.evaluate(() => PAVE.debug.tool) === 'move', 'B cancels back to the default tool');
+  // reticle snaps onto a squad, A selects it
+  const target = await p.evaluate(() => { const w = PAVE.debug.world, i = (PAVE.debug.selSquad + 1) % w.squads.length, sq = w.squads[i]; PAVE.debug.cam.x = sq.ax + 1; PAVE.debug.cam.y = sq.ay; return i; });
+  await p.waitForTimeout(150);
+  ok(await p.evaluate(() => PAVE.debug.padSnap && PAVE.debug.padSnap.kind === 'squad'), 'reticle snaps to the squad');
+  await tap(0);
+  ok(await p.evaluate((t) => PAVE.debug.selSquad === t, target), 'A on a squad selects it');
+  // move away and A places its line there
+  const a0 = await p.evaluate(() => PAVE.debug.world.squads[PAVE.debug.selSquad].ax);
+  await p.evaluate(() => { const w = PAVE.debug.world, m = w.map, sq = w.squads[PAVE.debug.selSquad];
+    for (let r = 25; r < 120; r += 5) for (let a = 0; a < 6.28; a += 0.5) { const x = sq.ax + Math.cos(a) * r, y = sq.ay + Math.sin(a) * r;
+      if (m.walkable(x, y) && w.squads.every((q) => Math.hypot(q.ax - x, q.ay - y) > 20)) { PAVE.debug.cam.x = x; PAVE.debug.cam.y = y; return; } } });
+  await p.waitForTimeout(150);
+  await tap(0);
+  const a1 = await p.evaluate(() => PAVE.debug.world.squads[PAVE.debug.selSquad].ax);
+  ok(Math.abs(a0 - a1) > 5, 'A away from squads places the line there');
+  // Y next squad
   const s0 = await p.evaluate(() => PAVE.debug.selSquad); await tap(3);
   ok(await p.evaluate((s0) => PAVE.debug.selSquad !== s0, s0), 'Y selects the next squad');
-  const a0 = await p.evaluate(() => { const w = PAVE.debug.world; return w.squads[PAVE.debug.selSquad].ax; });
-  await p.evaluate(() => { __pad.axes = [-0.8, 0.5, 0, 0]; }); await p.waitForTimeout(300); await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; });
-  await tap(1);
-  const a1 = await p.evaluate(() => { const w = PAVE.debug.world; return w.squads[PAVE.debug.selSquad].ax; });
-  ok(a0 !== a1, 'B orders the selected squad to the cursor');
   // D-pad up = reinforce
   const n0 = await p.evaluate(() => PAVE.debug.world.squads.length); await p.evaluate(() => { PAVE.debug.world.authority = 100; });
   await tap(12); ok(await p.evaluate(() => PAVE.debug.world.squads.length) === n0 + 1, 'D-pad up reinforces');
@@ -79,10 +89,12 @@ const path = require('path');
   await p.evaluate(() => PAVE.debug.start(0));
   await until(() => PAVE.debug.world && PAVE.debug.world.side === 'protest' && PAVE.debug.screen === null, null, 8000);
   await p.waitForTimeout(300);
-  const tx0 = await p.evaluate(() => PAVE.debug.world.blocs[0].tx);
-  await p.evaluate(() => { __pad.axes = [0.7, -0.3, 0, 0]; }); await p.waitForTimeout(300); await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; });
+  // aim near a landmark: the reticle snaps to it and A marches the bloc there
+  const lmId = await p.evaluate(() => { const lm = PAVE.debug.world.map.landmarks[1]; PAVE.debug.cam.x = lm.x + 3; PAVE.debug.cam.y = lm.y - 2; return lm.id; });
+  await p.waitForTimeout(150);
+  ok(await p.evaluate(() => PAVE.debug.padSnap && PAVE.debug.padSnap.kind === 'landmark'), 'reticle snaps to the landmark');
   await tap(0);
-  ok(await p.evaluate((tx0) => PAVE.debug.world.blocs[0].tx !== tx0, tx0), 'A sends the bloc to the cursor');
+  ok(await p.evaluate((id) => PAVE.debug.world.blocs[0].target === id, lmId), 'A marches the bloc to the snapped landmark');
   await tap(5); ok(await p.evaluate(() => PAVE.debug.tool) === 'casseurs', 'RB reaches Casseurs on the protest side');
   ok(errs.length === 0, 'no page errors ' + errs.join(' | '));
   await b.close();

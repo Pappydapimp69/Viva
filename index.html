@@ -74,6 +74,7 @@
       <label>Crowd <select id="sbPop"><option value="15000">15,000</option><option value="30000" selected>30,000</option><option value="60000">60,000</option><option value="100000">100,000 (needs a fast CPU)</option></select></label>
       <label>City size <select id="sbSize"><option value="256">Small</option><option value="320" selected>Medium</option><option value="352">Large</option></select></label>
       <label>Police squads <select id="sbSq"><option>3</option><option selected>6</option><option>10</option><option>14</option></select></label>
+      <label>District <select id="sbStyle"><option value="random">Surprise me</option><option value="haussmann">Haussmann boulevards</option><option value="marais">Medieval lanes</option><option value="river">Along the Seine</option><option value="etoile">Star avenues</option><option value="mixed">Mixed</option></select></label>
       <label>Time <select id="sbNight"><option value="0">Day</option><option value="1">Night</option></select></label>
       <label>Seed <input id="sbSeed" type="number" value="99"></label>
     </div>
@@ -98,7 +99,7 @@
     <div class="howto">
       <div><h3>CAMERA</h3><p><b>WASD / arrows</b> pan · <b>mouse wheel</b> zoom · <b>middle-drag</b> pan · click the <b>minimap</b> to jump · <b>Esc</b> pause · <b>Tab</b> speed.</p></div>
       <div><h3>✊ PROTEST</h3><p><b>[1] March</b>: left-click to send the selected bloc (<b>Q</b> switches bloc). The crowd routes itself around anything you block.<br><b>[2] Casseurs</b>: radicalise people under the cursor — they hunt parked cars. Fire spreads car to car on its own.<br><b>[3] Fireworks</b>: stun a police line.<br><b>[4] Barricade</b>: drag across a street.<br><b>[5] Mobilise</b>: call the group chat — more people pour in.<br>Everything costs <b>momentum</b>. Burning cars and holding landmarks build it; gas and arrests drain it.</p></div>
-      <div><h3>🎮 CONTROLLER</h3><p><b>Left stick</b> moves the cursor · <b>A</b> acts (hold A to draw a barricade) · <b>B</b> forms a police line / switches to March · <b>X</b> picks the squad under the cursor or the next bloc · <b>Y</b> jumps to the next squad or bloc · <b>LB/RB</b> change tool · <b>D-pad up</b> Mobilise / Reinforce · <b>LT/RT</b> zoom · <b>right stick</b> pans · <b>Start</b> pause · <b>Back</b> speed. In menus: stick or D-pad to move, A to choose, B to go back.</p></div>
+      <div><h3>🎮 CONTROLLER</h3><p><b>Left stick</b> moves the camera; the reticle stays centred and snaps to squads, landmarks and fires · <b>A</b> does it (select a squad, place its line, march, gas…; hold A to draw a barricade) · <b>B</b> cancels · <b>LB/RB</b> change tool · <b>Y</b> next squad or bloc · <b>X</b> go to it · <b>D-pad down</b> jump to the hot spot · <b>D-pad up</b> Mobilise / Reinforce · <b>right stick or triggers</b> zoom · <b>Start</b> pause · <b>Back</b> speed. In menus: stick or D-pad to move, A to choose, B to go back.</p></div>
       <div><h3>🛡 POLICE</h3><p>Click a squad (or <b>1–9</b>), then <b>right-click</b> where it should form a line — it spans the street by itself.<br><b>[C] Charge</b> arrests casseurs · <b>[G] Gas</b> · <b>[B] Barrier</b> drag a line · <b>[F] Pompiers</b> click a fire · <b>[R] Reinforce</b>.<br>Everything costs <b>authority</b>, which slowly regenerates.</p></div>
     </div>
     <button data-go="back" class="back">← BACK</button>
@@ -146,6 +147,7 @@
   <div id="loading" class="screen hidden"><div class="title small">PAVÉ</div><div id="loadText">Paving the streets…</div></div>
   <div id="achToast"></div>
   <div id="padCursor" class="hidden"></div>
+  <div id="padLabel" class="hidden"></div>
   <div id="padHints" class="hidden"></div>
 </div>
 

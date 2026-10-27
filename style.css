@@ -144,3 +144,6 @@ body.pad .padFocus { outline: 3px solid var(--y); outline-offset: 3px; }
 body.pad #view { cursor: none; }
 #padStatus { color: var(--mut); font-size: 13px; }
 body.pad #tip { bottom: 124px; }
+#padLabel { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 20; font-family: var(--font); font-size: 11px; letter-spacing: .5px;
+  background: rgba(0,0,0,.65); color: #fff; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
+#padCursor.snap { border-color: var(--y); width: 34px; height: 34px; margin: -17px 0 0 -17px; transition: width .1s, height .1s, margin .1s; }
