@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAVÉ — Paris Riot Manager</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="view"></canvas>
+
+  <!-- ===================== HUD ===================== -->
+  <div id="hud" class="hidden">
+    <div id="topLeft" class="panel">
+      <div id="lvName"></div>
+      <ul id="objList"></ul>
+    </div>
+    <div id="topCenter">
+      <div id="carsBadge"><span class="fireIco">🔥</span> CARS BURNED <b id="carsN">0</b></div>
+      <div id="timer">0:00</div>
+    </div>
+    <div id="topRight" class="panel">
+      <div class="resRow"><span id="resLabel">MOMENTUM</span><div class="bar"><div id="resFill"></div></div><b id="resVal">50</b></div>
+      <div class="counts">
+        <span title="Protesters">✊ <b id="cProt">0</b></span>
+        <span title="Casseurs">🖤 <b id="cCass">0</b></span>
+        <span title="Police">🛡 <b id="cPol">0</b></span>
+        <span title="Arrests">⛓ <b id="cArr">0</b></span>
+      </div>
+      <div class="speed"><button id="btnPause" title="Pause (Esc)">❚❚</button><button id="btnSpeed" title="Speed (Tab)">1×</button></div>
+    </div>
+    <div id="caption"></div>
+    <div id="toolbar"></div>
+    <div id="squadBar"></div>
+    <div id="phone">
+      <div id="phoneTop"><span id="phoneTime">14:12</span><span>4G ▮▮▮ 81%</span></div>
+      <div id="phoneHead"><div id="phoneAvatar">B</div><div><b id="phoneTitle">BLOC 11e</b><div id="phoneSub">312 membres</div></div></div>
+      <div id="chatLog"></div>
+      <div id="phoneInput">Message…<span>➤</span></div>
+    </div>
+    <canvas id="minimap" width="180" height="180"></canvas>
+    <div id="tip"></div>
+    <div id="fps"></div>
+  </div>
+
+  <!-- ===================== MENUS ===================== -->
+  <div id="mainMenu" class="screen">
+    <div class="titleWrap">
+      <div class="title">PAVÉ</div>
+      <div class="subtitle">MANAGING <span class="y">100,000 PEOPLE</span> IN A PARIS RIOT</div>
+    </div>
+    <div class="menuCol">
+      <button data-go="campaign" class="big">CAMPAIGN</button>
+      <button data-go="sandbox">SANDBOX</button>
+      <button data-go="howto">HOW TO PLAY</button>
+      <button data-go="settings">SETTINGS</button>
+      <button data-go="credits">CREDITS</button>
+      <button data-go="quit" id="btnQuit">QUIT</button>
+    </div>
+    <div class="foot">v<span id="ver"></span> · a crowd-simulation strategy game · all events fictional</div>
+  </div>
+
+  <div id="campaignMenu" class="screen hidden">
+    <h2>CAMPAIGN</h2>
+    <div id="levelGrid"></div>
+    <button data-go="main" class="back">← BACK</button>
+  </div>
+
+  <div id="sandboxMenu" class="screen hidden">
+    <h2>SANDBOX</h2>
+    <div class="form">
+      <label>Side <select id="sbSide"><option value="protest">Protest — lead the manif</option><option value="police">Police — command the CRS</option></select></label>
+      <label>Crowd <select id="sbPop"><option value="15000">15,000</option><option value="30000" selected>30,000</option><option value="60000">60,000</option><option value="100000">100,000 (needs a fast CPU)</option></select></label>
+      <label>City size <select id="sbSize"><option value="256">Small</option><option value="320" selected>Medium</option><option value="352">Large</option></select></label>
+      <label>Police squads <select id="sbSq"><option>3</option><option selected>6</option><option>10</option><option>14</option></select></label>
+      <label>Time <select id="sbNight"><option value="0">Day</option><option value="1">Night</option></select></label>
+      <label>Seed <input id="sbSeed" type="number" value="99"></label>
+    </div>
+    <div class="row"><button data-go="main" class="back">← BACK</button><button id="sbStart" class="big">START</button></div>
+  </div>
+
+  <div id="settingsMenu" class="screen hidden">
+    <h2>SETTINGS</h2>
+    <div class="form">
+      <label>Volume <input id="setVol" type="range" min="0" max="1" step="0.05"></label>
+      <label>Crowd density <select id="setCrowd"><option value="0.5">Low (fast PCs not needed)</option><option value="1">Normal</option><option value="1.5">High</option><option value="2.5">Insane</option></select></label>
+      <label>Edge scrolling <input id="setEdge" type="checkbox"></label>
+      <label>Show FPS <input id="setFps" type="checkbox"></label>
+      <label>Fullscreen <input id="setFull" type="checkbox"></label>
+    </div>
+    <button data-go="back" class="back">← BACK</button>
+  </div>
+
+  <div id="howtoMenu" class="screen hidden">
+    <h2>HOW TO PLAY</h2>
+    <div class="howto">
+      <div><h3>CAMERA</h3><p><b>WASD / arrows</b> pan · <b>mouse wheel</b> zoom · <b>middle-drag</b> pan · click the <b>minimap</b> to jump · <b>Esc</b> pause · <b>Tab</b> speed.</p></div>
+      <div><h3>✊ PROTEST</h3><p><b>[1] March</b>: left-click to send the selected bloc (<b>Q</b> switches bloc). The crowd routes itself and finds every gap.<br><b>[2] Casseurs</b>: radicalise people under the cursor — they hunt parked cars. Fire spreads car to car on its own.<br><b>[3] Fireworks</b>: stun a police line.<br><b>[4] Barricade</b>: drag across a street.<br><b>[5] Mobilise</b>: call the group chat — more people pour in.<br>Everything costs <b>momentum</b>. Burning cars and holding landmarks build it; gas and arrests drain it.</p></div>
+      <div><h3>🛡 POLICE</h3><p>Click a squad (or <b>1–9</b>), then <b>right-click</b> where it should form a line — it spans the street by itself.<br><b>[C] Charge</b> arrests casseurs · <b>[G] Gas</b> · <b>[B] Barrier</b> drag a line · <b>[F] Pompiers</b> click a fire · <b>[R] Reinforce</b>.<br>Everything costs <b>authority</b>, which slowly regenerates.</p></div>
+    </div>
+    <button data-go="back" class="back">← BACK</button>
+  </div>
+
+  <div id="creditsMenu" class="screen hidden">
+    <h2>CREDITS</h2>
+    <div class="howto"><p>PAVÉ is a work of fiction: a crowd-physics strategy game set in a procedurally generated Paris.<br>Design, code, procedural art &amp; procedural audio — the PAVÉ team.<br>Built with plain JavaScript and Canvas. No sample files: every sound is synthesised.</p></div>
+    <button data-go="main" class="back">← BACK</button>
+  </div>
+
+  <div id="briefing" class="screen dim hidden">
+    <div class="card">
+      <div id="brSide"></div>
+      <h2 id="brName"></h2>
+      <p id="brText"></p>
+      <ul id="brObj"></ul>
+      <div class="row"><button data-go="campaign" class="back">← BACK</button><button id="brGo" class="big">GO</button></div>
+    </div>
+  </div>
+
+  <div id="pauseMenu" class="screen dim hidden">
+    <div class="card">
+      <h2>PAUSED</h2>
+      <div class="menuCol">
+        <button id="psResume" class="big">RESUME</button>
+        <button id="psRestart">RESTART</button>
+        <button data-go="settings">SETTINGS</button>
+        <button data-go="howto">HOW TO PLAY</button>
+        <button id="psQuit">QUIT TO MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="endScreen" class="screen dim hidden">
+    <div class="card">
+      <h2 id="endTitle"></h2>
+      <div id="endStars"></div>
+      <p id="endWhy"></p>
+      <div id="endStats"></div>
+      <div class="row"><button id="endMenu" class="back">MENU</button><button id="endRetry">RETRY</button><button id="endNext" class="big">NEXT</button></div>
+    </div>
+  </div>
+
+  <div id="loading" class="screen hidden"><div class="title small">PAVÉ</div><div id="loadText">Paving the streets…</div></div>
+  <div id="achToast"></div>
+</div>
+
+<script src="src/core.js"></script>
+<script src="src/map.js"></script>
+<script src="src/flow.js"></script>
+<script src="src/crowd.js"></script>
+<script src="src/world.js"></script>
+<script src="src/ai.js"></script>
+<script src="src/levels.js"></script>
+<script src="src/render.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/chat.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

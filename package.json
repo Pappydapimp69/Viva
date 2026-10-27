@@ -1,0 +1,34 @@
+{
+  "name": "pave",
+  "productName": "PAVÉ",
+  "version": "1.0.0",
+  "description": "PAVÉ — Paris Riot Manager. A crowd-physics strategy game: lead the manif or hold the line.",
+  "main": "electron/main.js",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/sim.test.js",
+    "smoke": "node test/smoke.js",
+    "bench": "node tools/bench.js",
+    "build:web": "node tools/build-web.js",
+    "dist": "electron-builder --win --linux",
+    "dist:mac": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "optionalDependencies": {
+    "steamworks.js": "^0.4.0"
+  },
+  "build": {
+    "appId": "com.pave.parisriot",
+    "productName": "PAVE",
+    "files": ["index.html", "style.css", "src/**", "electron/**", "steam_appid.txt"],
+    "directories": { "output": "dist" },
+    "win": { "target": "dir" },
+    "linux": { "target": "dir" },
+    "mac": { "target": "dir" }
+  }
+}

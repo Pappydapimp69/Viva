@@ -1,0 +1,7 @@
+.brain/
+node_modules/
+dist/
+out/
+*.log
+test/out/
+dist-web/

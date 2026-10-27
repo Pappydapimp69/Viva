@@ -1,0 +1,687 @@
+// Game shell: menus, HUD, input, camera, tools, the fixed-step loop, saves,
+// achievements (local + Steam bridge when running under Electron).
+(function () {
+  const P = globalThis.PAVE;
+  const S = P.SIDE, K = P.K;
+  const $ = (id) => document.getElementById(id);
+  const audio = P.audio;
+
+  // ------------------------------------------------------------ persistence
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('pave.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('pave.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
+  };
+  const settings = Object.assign({ vol: 0.7, crowd: 1, edge: false, fps: false, full: false }, store.get('settings', {}));
+  const progress = Object.assign({ unlocked: 1, stars: {}, ach: {} }, store.get('progress', {}));
+  const saveSettings = () => store.set('settings', settings);
+  const saveProgress = () => store.set('progress', progress);
+
+  const ACH = {
+    FIRST_FIRE: 'Allumer le feu — burn your first car',
+    CENT: 'Cent voitures — 100 cars burned in one night',
+    HOLD: 'Tenir la ligne — win Tenir la Ligne',
+    POMPIER: 'Soldat du feu — extinguish 25 fires in one game',
+    NASSE: 'La Nasse — win La Nasse',
+    BRULE: 'Paris brûle-t-il ? — win Paris Brûle',
+    PEACE: 'Manif pacifique — win a protest level with fewer than 5 cars burned',
+    ALL3: 'Trois étoiles — three stars on every level',
+  };
+  function unlock(id) {
+    if (progress.ach[id]) return;
+    progress.ach[id] = Date.now(); saveProgress();
+    try { if (globalThis.steam && globalThis.steam.activate) globalThis.steam.activate(id); } catch (e) { /* no steam */ }
+    const t = $('achToast');
+    t.innerHTML = '<b>ACHIEVEMENT</b>' + ACH[id];
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 4200);
+  }
+
+  // ------------------------------------------------------------ state
+  const canvas = $('view');
+  const R = new P.Renderer(canvas);
+  let world = null, level = null, levelIdx = -1, chat = null;
+  const cam = { x: 160, y: 160, zoom: 3, tz: 3 };
+  let paused = true, speed = 1, acc = 0, last = performance.now();
+  let tool = null, selBloc = 0, selSquad = -1;
+  let mouse = { x: 0, y: 0, wx: 0, wy: 0, down: false, mid: false, drag: null, lastX: 0, lastY: 0 };
+  const keys = {};
+  let captionT = 0, shownCaptions = {};
+  let prevScreen = 'mainMenu';
+  let fpsT = 0, fpsN = 0;
+
+  function resize() {
+    const dpr = 1; // crowd layer is per-pixel; keep 1:1 for speed
+    canvas.width = Math.floor(innerWidth * dpr); canvas.height = Math.floor(innerHeight * dpr);
+    R.resize(canvas.width, canvas.height);
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // ------------------------------------------------------------ screens
+  const screens = ['mainMenu', 'campaignMenu', 'sandboxMenu', 'settingsMenu', 'howtoMenu', 'creditsMenu', 'briefing', 'pauseMenu', 'endScreen', 'loading'];
+  let current = 'mainMenu';
+  function show(id) {
+    if (id !== current && ['settingsMenu', 'howtoMenu'].includes(id)) prevScreen = current;
+    for (const s of screens) $(s).classList.toggle('hidden', s !== id);
+    current = id;
+    if (id === 'campaignMenu') buildLevelGrid();
+    if (id === 'settingsMenu') loadSettingsUI();
+  }
+  function hideScreens() { for (const s of screens) $(s).classList.add('hidden'); current = null; }
+
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-go]');
+    if (!b) return;
+    audio.init(); audio.play('ui');
+    const go = b.dataset.go;
+    if (go === 'main') { show('mainMenu'); }
+    else if (go === 'campaign') show('campaignMenu');
+    else if (go === 'sandbox') show('sandboxMenu');
+    else if (go === 'settings') show('settingsMenu');
+    else if (go === 'howto') show('howtoMenu');
+    else if (go === 'credits') show('creditsMenu');
+    else if (go === 'back') show(prevScreen || 'mainMenu');
+    else if (go === 'quit') { if (globalThis.steam && globalThis.steam.quit) globalThis.steam.quit(); else window.close(); }
+  });
+
+  function buildLevelGrid() {
+    const g = $('levelGrid');
+    g.innerHTML = '';
+    P.LEVELS.forEach((lv, i) => {
+      const b = document.createElement('button');
+      const locked = i >= progress.unlocked;
+      b.className = 'lvl' + (locked ? ' locked' : '');
+      const st = progress.stars[lv.id] || 0;
+      b.innerHTML = `<span class="side ${lv.side}">${i + 1} · ${lv.side === S.PROTEST ? '✊ PROTEST' : '🛡 POLICE'}${lv.night ? ' · NIGHT' : ''}</span>
+        <span class="n">${lv.name}</span><span style="font-size:12px;color:#bbb">${lv.objectives.map((o) => o.label).join(' · ')}</span>
+        <span class="st">${locked ? '🔒' : '★'.repeat(st) + '☆'.repeat(3 - st)}</span>`;
+      if (!locked) b.onclick = () => { audio.init(); audio.play('ui'); brief(i); };
+      g.appendChild(b);
+    });
+  }
+
+  function brief(i) {
+    const lv = P.LEVELS[i];
+    levelIdx = i;
+    $('brSide').textContent = lv.side === S.PROTEST ? '✊ YOU LEAD THE PROTEST' : '🛡 YOU COMMAND THE POLICE';
+    $('brSide').style.color = lv.side === S.PROTEST ? '#ff8a5b' : '#7fb0ff';
+    $('brName').textContent = lv.name;
+    $('brText').textContent = lv.brief;
+    $('brObj').innerHTML = lv.objectives.map((o) => '<li>▸ ' + o.label + '</li>').join('') + `<li style="color:#aaa">⏱ ${P.fmtTime(lv.time)}</li>`;
+    show('briefing');
+  }
+  $('brGo').onclick = () => { audio.init(); start(P.LEVELS[levelIdx]); };
+  $('sbStart').onclick = () => {
+    audio.init();
+    levelIdx = -1;
+    start(P.sandboxLevel({ side: $('sbSide').value, pop: +$('sbPop').value, size: +$('sbSize').value,
+      squads: +$('sbSq').value, night: $('sbNight').value === '1', seed: +$('sbSeed').value || 1 }), true);
+  };
+
+  function loadSettingsUI() {
+    $('setVol').value = settings.vol; $('setCrowd').value = String(settings.crowd);
+    $('setEdge').checked = settings.edge; $('setFps').checked = settings.fps; $('setFull').checked = !!document.fullscreenElement;
+  }
+  $('setVol').oninput = (e) => { settings.vol = +e.target.value; audio.setVolume(settings.vol); saveSettings(); };
+  $('setCrowd').onchange = (e) => { settings.crowd = +e.target.value; saveSettings(); };
+  $('setEdge').onchange = (e) => { settings.edge = e.target.checked; saveSettings(); };
+  $('setFps').onchange = (e) => { settings.fps = e.target.checked; saveSettings(); $('fps').textContent = ''; };
+  $('setFull').onchange = (e) => {
+    settings.full = e.target.checked; saveSettings();
+    if (e.target.checked) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {});
+    else document.exitFullscreen && document.fullscreenElement && document.exitFullscreen();
+  };
+
+  // ------------------------------------------------------------ game start
+  function start(lv, sandbox) {
+    show('loading');
+    $('loadText').textContent = 'Paving the streets…';
+    setTimeout(() => {
+      level = lv;
+      world = new P.World(lv, { crowdScale: sandbox ? 1 : settings.crowd, maxAgents: 140000 });
+      R.setWorld(world);
+      chat = new P.Chat($('chatLog'), world.side, world.map);
+      $('chatLog').innerHTML = '';
+      const prot = world.side === S.PROTEST;
+      $('hud').classList.toggle('police', !prot);
+      $('phoneTitle').textContent = prot ? 'BLOC 11e' : 'PC PRÉFECTURE';
+      $('phoneAvatar').textContent = prot ? 'B' : 'P';
+      $('phoneInput').firstChild.textContent = prot ? 'Message…' : 'Canal 3…';
+      $('resLabel').textContent = prot ? 'MOMENTUM' : 'AUTHORITY';
+      $('lvName').textContent = lv.name.toUpperCase();
+      (lv.chat || []).forEach((m, i) => setTimeout(() => chat && chat.post(m, prot ? ['yanis', 'inès', 'sarah'][i % 3] : 'PC Préfecture'), 900 + i * 1400));
+      // camera: start on the player's side
+      const focus = prot ? (world.rally || world.spawnEntries[0]) : world.map.landmarks[(lv.objectives[0] && lv.objectives[0].lm) || 0];
+      cam.x = focus.x; cam.y = focus.y; cam.zoom = cam.tz = 3.2;
+      tool = prot ? 'march' : 'move';
+      selBloc = 0; selSquad = prot ? -1 : 0;
+      shownCaptions = {};
+      speed = 1; $('btnSpeed').textContent = '1×';
+      buildToolbar();
+      buildSquadBar();
+      hideScreens();
+      $('hud').classList.remove('hidden');
+      caption(lv.caption[0], lv.caption[1], 3.5);
+      paused = false; acc = 0;
+      R.miniT = 0;
+    }, 30);
+  }
+
+  function caption(a, b, t) {
+    const c = $('caption');
+    c.innerHTML = `${a} ${b ? '<span class="y">' + b + '</span>' : ''}`;
+    c.classList.add('show');
+    captionT = t || 2.8;
+  }
+  function captionOnce(key, a, b) { if (shownCaptions[key]) return; shownCaptions[key] = 1; caption(a, b, 2.6); }
+  let tipT = 0;
+  function tip(text) { $('tip').textContent = text; $('tip').classList.add('show'); tipT = 2.2; }
+
+  // ------------------------------------------------------------ tools
+  const PROT_TOOLS = [
+    { id: 'march', key: '1', ico: '🚩', name: 'MARCH', cost: 0, hint: 'Click: send the selected bloc there (Q: next bloc)' },
+    { id: 'casseurs', key: '2', ico: '🖤', name: 'CASSEURS', cost: 8, hint: 'Click the crowd: radicalise ~20 people' },
+    { id: 'fireworks', key: '3', ico: '🎆', name: 'FIREWORKS', cost: 6, cd: 5, hint: 'Click police: stun the line' },
+    { id: 'barricade', key: '4', ico: '🚧', name: 'BARRICADE', cost: 0.6, hint: 'Drag across a street (cost per tile)' },
+    { id: 'mobilise', key: '5', ico: '📣', name: 'MOBILISE', cost: 15, cd: 30, hint: 'Instant: the group chat brings 800 more' },
+  ];
+  const POL_TOOLS = [
+    { id: 'move', key: 'M', ico: '🛡', name: 'LINE', cost: 0, hint: 'Click a squad, right-click to form a line' },
+    { id: 'charge', key: 'C', ico: '⚡', name: 'CHARGE', cost: 5, hint: 'Click: selected squad charges and arrests casseurs' },
+    { id: 'gas', key: 'G', ico: '💨', name: 'GAS', cost: 10, cd: 3, hint: 'Click: tear gas (thrown by the selected squad)' },
+    { id: 'barrier', key: 'B', ico: '🚧', name: 'BARRIER', cost: 0.8, hint: 'Drag across a street (cost per tile)' },
+    { id: 'truck', key: 'F', ico: '🚒', name: 'POMPIERS', cost: 4, hint: 'Click a burning car: send a fire truck' },
+    { id: 'reinforce', key: 'R', ico: '🚐', name: 'REINFORCE', cost: 30, cd: 20, hint: 'Instant: a fresh CRS company' },
+  ];
+  const tools = () => (world && world.side === S.PROTEST ? PROT_TOOLS : POL_TOOLS);
+  function res() { return world.side === S.PROTEST ? world.momentum : world.authority; }
+  function spend(n) { if (world.side === S.PROTEST) world.momentum -= n; else world.authority -= n; }
+
+  function buildToolbar() {
+    const tb = $('toolbar');
+    tb.innerHTML = '';
+    for (const t of tools()) {
+      const b = document.createElement('button');
+      b.className = 'tool'; b.id = 'tool_' + t.id; b.title = t.hint;
+      b.innerHTML = `<span class="key">${t.key}</span>${t.cost ? `<span class="cost">${t.cost}</span>` : ''}<span class="ico">${t.ico}</span>${t.name}<span class="cd"></span>`;
+      b.onclick = (e) => { e.stopPropagation(); pickTool(t.id); };
+      tb.appendChild(b);
+    }
+  }
+  function pickTool(id) {
+    const t = tools().find((x) => x.id === id);
+    if (!t) return;
+    audio.play('ui');
+    if (id === 'mobilise' || id === 'reinforce') { useInstant(t); return; }
+    tool = id;
+    tip(t.hint);
+  }
+  function useInstant(t) {
+    if ((world.cooldowns[t.id] || 0) > 0) return tip('Recharging…');
+    if (res() < t.cost) return tip('Not enough ' + (world.side === S.PROTEST ? 'momentum' : 'authority'));
+    spend(t.cost); world.cooldowns[t.id] = t.cd || 0;
+    if (t.id === 'mobilise') {
+      const n = world.spawnProtesters(800, false);
+      world.emit('mobilise', { x: world.spawnEntries[0].x, y: world.spawnEntries[0].y });
+      chat.me('tout le monde à ' + (world.blocs[selBloc].target >= 0 ? world.map.landmarks[world.blocs[selBloc].target].name : 'la manif') + ' 📣');
+      tip('+' + n + ' protesters on the way');
+    } else if (t.id === 'reinforce') {
+      const sq = world.addSquad(48);
+      if (sq) { buildSquadBar(); selSquad = sq.id; tip(sq.name + ' deployed'); }
+    }
+  }
+
+  function buildSquadBar() {
+    const bar = $('squadBar');
+    bar.innerHTML = '';
+    if (world.side === S.PROTEST) {
+      world.blocs.forEach((b, i) => {
+        const el = document.createElement('button');
+        el.className = 'sq'; el.id = 'blc_' + i;
+        el.onclick = (e) => { e.stopPropagation(); selBloc = i; };
+        bar.appendChild(el);
+      });
+    } else {
+      world.squads.forEach((sq, i) => {
+        const el = document.createElement('button');
+        el.className = 'sq'; el.id = 'sq_' + i;
+        el.onclick = (e) => { e.stopPropagation(); selSquad = i; cam.x = sq.ax; cam.y = sq.ay; };
+        bar.appendChild(el);
+      });
+    }
+  }
+  function updateSquadBar() {
+    if (world.side === S.PROTEST) {
+      world.blocs.forEach((b, i) => {
+        const el = $('blc_' + i); if (!el) return;
+        el.className = 'sq' + (i === selBloc ? ' sel' : '');
+        const tgt = b.target >= 0 ? 'Pl. ' + world.map.landmarks[b.target].name : world.map.streetAt(b.tx, b.ty);
+        el.textContent = `${'ABC'[i]} · ${P.fmtNum(b.n)} → ${tgt}`;
+      });
+    } else {
+      if (world.squads.length !== $('squadBar').children.length) buildSquadBar();
+      world.squads.forEach((sq, i) => {
+        const el = $('sq_' + i); if (!el) return;
+        el.className = 'sq' + (i === selSquad ? ' sel' : '') + (sq.charge > 0 ? ' charge' : '');
+        el.textContent = `${i < 9 ? i + 1 : '·'} ${sq.name}${sq.charge > 0 ? ' ⚡' : ''}`;
+      });
+    }
+  }
+
+  // nearest agent of a kind to a point (click helpers)
+  function nearestAgent(x, y, kindTest, maxD) {
+    const cr = world.crowd;
+    let best = -1, bd = maxD * maxD;
+    for (let i = 0; i < cr.n; i++) {
+      if (!kindTest(cr.kind[i])) continue;
+      const dx = cr.x[i] - x, dy = cr.y[i] - y, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  function nearestBurning(x, y, maxD) {
+    let best = null, bd = maxD;
+    for (const c of world.map.cars) if (c.state === 1) { const d = Math.hypot(c.cx - x, c.cy - y); if (d < bd) { bd = d; best = c; } }
+    return best;
+  }
+
+  function primary(wx, wy) {
+    const t = tools().find((x) => x.id === tool);
+    if (!t || !world) return;
+    if ((world.cooldowns[t.id] || 0) > 0) return tip('Recharging…');
+    if (t.cost && t.id !== 'barricade' && t.id !== 'barrier' && res() < t.cost) return tip('Not enough ' + (world.side === S.PROTEST ? 'momentum' : 'authority'));
+    const map = world.map;
+    switch (tool) {
+      case 'march': {
+        if (!map.nearestOpen(wx, wy, 10)) return tip('Can\'t march into a building');
+        let lmId = null;
+        for (const lm of map.landmarks) if (Math.hypot(lm.x - wx, lm.y - wy) < lm.r + 3) { lmId = lm.id; wx = lm.x; wy = lm.y; }
+        world.setBlocTarget(selBloc, wx, wy, lmId);
+        audio.play('order');
+        const name = lmId != null ? map.landmarks[lmId].name : map.streetAt(wx, wy);
+        chat.me((world.blocs.length > 1 ? 'bloc ' + 'ABC'[selBloc] + ' → ' : 'on va ') + name + ' ✊');
+        break;
+      }
+      case 'casseurs': {
+        const n = world.convertCasseurs(wx, wy, 8, 20);
+        if (!n) return tip('No protesters there');
+        spend(t.cost); audio.play('ui');
+        captionOnce('cass', 'INFILTRATE THE', 'CASSEURS');
+        break;
+      }
+      case 'fireworks': {
+        const i = nearestAgent(wx, wy, (k) => k !== K.POL, 40);
+        if (i < 0) return tip('Nobody close enough to launch');
+        world.launchFireworks(world.crowd.x[i], world.crowd.y[i], wx, wy);
+        spend(t.cost); world.cooldowns.fireworks = t.cd;
+        audio.play('firework', camDist(wx, wy));
+        captionOnce('fw', 'FIREWORKS', 'VS SHIELDS');
+        break;
+      }
+      case 'move': {
+        const i = nearestAgent(wx, wy, (k) => k === K.POL, 3);
+        if (i >= 0) { selSquad = world.crowd.grp[i]; audio.play('ui'); return; }
+        orderSel(wx, wy, false);
+        break;
+      }
+      case 'charge': {
+        if (selSquad < 0) return tip('Select a squad first');
+        orderSel(wx, wy, true);
+        break;
+      }
+      case 'gas': {
+        const sq = world.squads[selSquad] || world.squads.reduce((a, s) => (Math.hypot(s.ax - wx, s.ay - wy) < Math.hypot(a.ax - wx, a.ay - wy) ? s : a));
+        if (Math.hypot(sq.ax - wx, sq.ay - wy) > 40) return tip(sq.name + ' is too far (40 m)');
+        world.throwGas(sq.ax, sq.ay, wx, wy);
+        spend(t.cost); world.cooldowns.gas = t.cd;
+        audio.play('gas', camDist(wx, wy));
+        captionOnce('gas', 'TEAR', 'GAS');
+        break;
+      }
+      case 'truck': {
+        const c = nearestBurning(wx, wy, 10);
+        if (!c) return tip('Click a burning car');
+        if (world.trucksOut >= world.trucksMax) return tip('All trucks are out (' + world.trucksMax + ')');
+        if (world.dispatchTruck(c)) { spend(t.cost); audio.play('order'); captionOnce('pomp', 'OR PLAY', 'THE POMPIERS'); }
+        else tip('No road to that fire');
+        break;
+      }
+    }
+  }
+  function orderSel(wx, wy, charge) {
+    const sq = world.squads[selSquad];
+    if (!sq) return tip('Select a squad (click one, or 1–9)');
+    if (charge) { if (world.authority < 5) return tip('Not enough authority'); world.authority -= 5; }
+    if (world.orderSquad(sq, wx, wy, charge)) { audio.play('order'); if (!charge) captionOnce('line', 'HOLD', 'THE LINE'); }
+  }
+  function camDist(x, y) { return Math.hypot(x - cam.x, y - cam.y) * (3 / cam.zoom); }
+
+  function placeLine(a, b) {
+    const t = tools().find((x) => x.id === tool);
+    const kind = world.side === S.PROTEST ? 1 : 2;
+    const len = Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) + 1;
+    const afford = Math.floor(res() / t.cost);
+    const maxT = Math.min(30, afford, Math.ceil(len) * 2);
+    if (maxT <= 0) return tip('Not enough ' + (kind === 1 ? 'momentum' : 'authority'));
+    if (kind === 1 && nearestAgent((a.x + b.x) / 2, (a.y + b.y) / 2, (k) => k !== K.POL, 25) < 0) return tip('Build it near your people');
+    const n = world.placeBarricade(a.x, a.y, b.x, b.y, kind, maxT);
+    if (n) { spend(n * t.cost); audio.play('barricade', camDist(a.x, a.y)); if (kind === 1) captionOnce('barr', 'BUILD', 'BARRICADES'); }
+  }
+
+  // ------------------------------------------------------------ input
+  function toWorld(sx, sy) { return { x: (sx - canvas.width / 2) / cam.zoom + cam.x, y: (sy - canvas.height / 2) / cam.zoom + cam.y }; }
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('mousedown', (e) => {
+    audio.init();
+    if (!world || paused) return;
+    const w = toWorld(e.offsetX, e.offsetY);
+    if (e.button === 1 || (e.button === 2 && world.side === S.PROTEST)) { mouse.mid = true; mouse.lastX = e.clientX; mouse.lastY = e.clientY; mouse.panMoved = 0; return; }
+    if (e.button === 2) { orderSel(w.x, w.y, false); return; }
+    if (e.button === 0) {
+      if (tool === 'barricade' || tool === 'barrier') { mouse.drag = { x: w.x, y: w.y }; return; }
+      primary(w.x, w.y);
+    }
+  });
+  addEventListener('mouseup', (e) => {
+    if (mouse.mid && (e.button === 1 || e.button === 2)) {
+      mouse.mid = false;
+      if (e.button === 2 && world && world.side === S.PROTEST && mouse.panMoved < 4) pickTool('march');
+    }
+    if (mouse.drag && e.button === 0 && world) {
+      const w = toWorld(mouse.x, mouse.y);
+      placeLine(mouse.drag, w);
+      mouse.drag = null;
+    }
+  });
+  addEventListener('mousemove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top;
+    if (mouse.mid) {
+      const dx = e.clientX - mouse.lastX, dy = e.clientY - mouse.lastY;
+      mouse.panMoved += Math.abs(dx) + Math.abs(dy);
+      cam.x -= dx / cam.zoom; cam.y -= dy / cam.zoom;
+      mouse.lastX = e.clientX; mouse.lastY = e.clientY;
+    }
+  });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (!world) return;
+    cam.tz = P.clamp(cam.tz * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 0.9, 16);
+  }, { passive: false });
+  addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+    if (!world) return;
+    if (e.code === 'Escape') { togglePause(); return; }
+    if (e.code === 'Tab') { e.preventDefault(); cycleSpeed(); return; }
+    if (paused) return;
+    const k = e.key.toUpperCase();
+    if (world.side === S.PROTEST) {
+      const t = PROT_TOOLS.find((x) => x.key === k); if (t) pickTool(t.id);
+      if (k === 'Q') { selBloc = (selBloc + 1) % world.blocs.length; const b = world.blocs[selBloc]; if (b.n) { cam.x = b.cx; cam.y = b.cy; } }
+    } else {
+      const t = POL_TOOLS.find((x) => x.key === k); if (t) pickTool(t.id);
+      if (/^[1-9]$/.test(e.key) && world.squads[+e.key - 1]) {
+        selSquad = +e.key - 1;
+        if (e.shiftKey || lastNum === e.key) { const sq = world.squads[selSquad]; cam.x = sq.ax; cam.y = sq.ay; }
+        lastNum = e.key; setTimeout(() => { lastNum = null; }, 350);
+      }
+      if (k === 'Q') selSquad = (selSquad + 1) % world.squads.length;
+    }
+  });
+  let lastNum = null;
+  addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+  const mm = $('minimap'), mmg = mm.getContext('2d');
+  function miniJump(e) {
+    if (!world) return;
+    const r = mm.getBoundingClientRect();
+    cam.x = ((e.clientX - r.left) / r.width) * world.map.W;
+    cam.y = ((e.clientY - r.top) / r.height) * world.map.H;
+  }
+  let miniDrag = false;
+  mm.addEventListener('mousedown', (e) => { miniDrag = true; miniJump(e); });
+  addEventListener('mouseup', () => { miniDrag = false; });
+  mm.addEventListener('mousemove', (e) => { if (miniDrag) miniJump(e); });
+
+  function togglePause() {
+    if (!world || world.result) return;
+    paused = !paused;
+    if (paused) show('pauseMenu'); else hideScreens();
+  }
+  function cycleSpeed() { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('btnSpeed').textContent = speed + '×'; }
+  $('btnPause').onclick = (e) => { e.stopPropagation(); togglePause(); };
+  $('btnSpeed').onclick = (e) => { e.stopPropagation(); cycleSpeed(); };
+  $('psResume').onclick = () => togglePause();
+  $('psRestart').onclick = () => { paused = true; start(level, levelIdx < 0); };
+  $('psQuit').onclick = () => quitToMenu();
+  function quitToMenu() { world = null; paused = true; $('hud').classList.add('hidden'); show('mainMenu'); }
+
+  // ------------------------------------------------------------ overlay (world space)
+  const overlay = (g, z) => {
+    if (!world) return;
+    const lw = 1.6 / z;
+    if (world.side === S.PROTEST) {
+      world.blocs.forEach((b, i) => {
+        const sel = i === selBloc;
+        g.strokeStyle = sel ? 'rgba(255,210,31,0.95)' : 'rgba(255,255,255,0.5)'; g.lineWidth = lw * (sel ? 2 : 1);
+        g.beginPath(); g.moveTo(b.tx, b.ty); g.lineTo(b.tx, b.ty - 6); g.stroke();
+        g.fillStyle = sel ? '#ffd21f' : '#ddd';
+        g.beginPath(); g.moveTo(b.tx, b.ty - 6); g.lineTo(b.tx + 3.4, b.ty - 5); g.lineTo(b.tx, b.ty - 4); g.fill();
+        if (sel && b.n) { g.setLineDash([0.8, 0.8]); g.beginPath(); g.moveTo(b.cx, b.cy); g.lineTo(b.tx, b.ty); g.stroke(); g.setLineDash([]); }
+      });
+    } else {
+      world.squads.forEach((sq, i) => {
+        const sel = i === selSquad;
+        g.strokeStyle = sq.charge > 0 ? 'rgba(255,90,70,0.9)' : sel ? 'rgba(255,210,31,0.95)' : 'rgba(120,170,255,0.35)';
+        g.lineWidth = lw * (sel ? 2 : 1);
+        const hw = 6;
+        g.beginPath(); g.moveTo(sq.ax - sq.ux * hw, sq.ay - sq.uy * hw); g.lineTo(sq.ax + sq.ux * hw, sq.ay + sq.uy * hw); g.stroke();
+        if (sel) {
+          g.beginPath(); g.moveTo(sq.ax, sq.ay); g.lineTo(sq.ax + sq.nx * 4, sq.ay + sq.ny * 4); g.stroke();
+          g.font = `${12 / z}px sans-serif`; g.fillStyle = '#ffd21f'; g.textAlign = 'center';
+          g.fillText(sq.name, sq.ax, sq.ay - 3);
+        }
+      });
+    }
+    const w = toWorld(mouse.x, mouse.y);
+    g.lineWidth = lw;
+    if (mouse.drag) {
+      g.strokeStyle = world.side === S.PROTEST ? 'rgba(255,170,60,0.9)' : 'rgba(200,215,240,0.9)';
+      g.lineWidth = 1; g.beginPath(); g.moveTo(mouse.drag.x, mouse.drag.y); g.lineTo(w.x, w.y); g.stroke();
+    } else if (tool === 'casseurs' || tool === 'gas' || tool === 'fireworks') {
+      const r = tool === 'casseurs' ? 8 : tool === 'gas' ? 6 : 6.5;
+      g.strokeStyle = tool === 'gas' ? 'rgba(240,240,240,0.7)' : tool === 'casseurs' ? 'rgba(20,20,20,0.9)' : 'rgba(255,90,90,0.9)';
+      g.setLineDash([1, 1]); g.beginPath(); g.arc(w.x, w.y, r, 0, 6.283); g.stroke(); g.setLineDash([]);
+    }
+  };
+
+  // ------------------------------------------------------------ per-frame
+  function handleEvents() {
+    const evs = world.events;
+    if (!evs.length) return;
+    for (const e of evs) {
+      R.fxEvent(e);
+      chat.event(e, world.time);
+      switch (e.type) {
+        case 'ignite':
+          if (camDist(e.x, e.y) < 120 && Math.random() < 0.5) audio.play('ignite', camDist(e.x, e.y));
+          $('carsBadge').classList.remove('bump'); void $('carsBadge').offsetWidth; $('carsBadge').classList.add('bump');
+          if (world.stats.burned === 1) unlock('FIRST_FIRE');
+          if (world.stats.burned >= 100) unlock('CENT');
+          if (e.by === 'spread') captionOnce('spread', 'FIRE SPREADS', 'ON ITS OWN');
+          break;
+        case 'capture': audio.play(world.side === S.PROTEST ? 'capture' : 'lost'); caption('PLACE DE LA', e.name.toUpperCase(), 2.4); break;
+        case 'retake': audio.play(world.side === S.PROTEST ? 'lost' : 'capture'); break;
+        case 'gas': if (world.side === S.PROTEST) audio.play('gas', camDist(e.x, e.y)); break;
+        case 'fireworks': if (world.side === S.POLICE) audio.play('firework', camDist(e.x, e.y)); break;
+        case 'burst': if (e.hit > 20) captionOnce('fw', 'FIREWORKS', 'VS SHIELDS'); break;
+        case 'charge': if (world.side === S.PROTEST && camDist(e.x, e.y) < 80) captionOnce('charge', 'THE', 'CHARGE'); break;
+        case 'extinguished': if (world.stats.extinguished >= 25) unlock('POMPIER'); break;
+        case 'win': case 'lose': end(); break;
+      }
+    }
+    world.events.length = 0;
+  }
+
+  function end() {
+    const r = world.result, st = world.stats;
+    audio.play(r.win ? 'win' : 'lose');
+    $('endTitle').textContent = r.win ? (world.side === S.PROTEST ? 'VICTOIRE !' : 'ORDRE RÉTABLI') : 'DÉFAITE';
+    $('endTitle').style.color = r.win ? '#ffd21f' : '#ff6b5b';
+    $('endStars').textContent = '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars);
+    $('endWhy').textContent = r.why;
+    $('endStats').innerHTML = [['Cars burned', st.burned], ['Arrests', st.arrests], ['Peak crowd', P.fmtNum(st.peak)],
+      ['Landmarks taken', st.captures], ['Tear gas', st.gasUsed], ['Fireworks', st.fireworks], ['Fires put out', st.extinguished],
+      ['Time', P.fmtTime(r.time)]].map(([a, b]) => `<div>${a}<b>${b}</b></div>`).join('');
+    const isCampaign = levelIdx >= 0;
+    if (r.win && isCampaign) {
+      const id = level.id;
+      progress.stars[id] = Math.max(progress.stars[id] || 0, r.stars);
+      progress.unlocked = Math.max(progress.unlocked, Math.min(P.LEVELS.length, levelIdx + 2));
+      saveProgress();
+      if (id === 'line') unlock('HOLD');
+      if (id === 'nasse') unlock('NASSE');
+      if (id === 'brule') unlock('BRULE');
+      if (world.side === S.PROTEST && st.burned < 5) unlock('PEACE');
+      if (P.LEVELS.every((l) => (progress.stars[l.id] || 0) >= 3)) unlock('ALL3');
+    }
+    $('endNext').classList.toggle('hidden', !(r.win && isCampaign && levelIdx + 1 < P.LEVELS.length));
+    paused = true;
+    setTimeout(() => show('endScreen'), 900);
+  }
+  $('endMenu').onclick = () => quitToMenu();
+  $('endRetry').onclick = () => start(level, levelIdx < 0);
+  $('endNext').onclick = () => brief(levelIdx + 1);
+
+  function updateHUD() {
+    const w = world;
+    $('carsN').textContent = w.stats.burned;
+    const left = w.timeLimit - w.time;
+    $('timer').textContent = P.fmtTime(left);
+    $('timer').classList.toggle('low', left < 30);
+    const r = res();
+    $('resFill').style.width = r + '%';
+    $('resVal').textContent = Math.floor(r);
+    $('cProt').textContent = P.fmtNum(w.protCount - w.cassCount);
+    $('cCass').textContent = P.fmtNum(w.cassCount);
+    $('cPol').textContent = P.fmtNum(w.polCount);
+    $('cArr').textContent = w.stats.arrests;
+    $('objList').innerHTML = w.objectives.map((o) => `<li class="${o.done ? 'done' : o.failed ? 'failed' : ''}"><span>${o.done ? '✔' : '▸'} ${o.label}</span><b>${o.progress}</b></li>`).join('');
+    for (const t of tools()) {
+      const el = $('tool_' + t.id); if (!el) continue;
+      el.classList.toggle('active', tool === t.id);
+      el.classList.toggle('disabled', t.cost > r);
+      const cd = w.cooldowns[t.id] || 0;
+      el.querySelector('.cd').style.height = (t.cd && cd > 0 ? (cd / t.cd) * 100 : 0) + '%';
+    }
+    if (world.side === S.PROTEST) $('phoneSub').textContent = P.fmtNum(w.protCount) + ' membres';
+    else $('phoneSub').textContent = w.squads.length + ' unités · ' + w.trucksOut + '/' + w.trucksMax + ' VSAV';
+    const hh = 14 + Math.floor(w.time / 60 / 4) + (level.night ? 7 : 0), mi = Math.floor(w.time / 4) % 60;
+    $('phoneTime').textContent = (hh % 24) + ':' + (mi < 10 ? '0' : '') + mi;
+    updateSquadBar();
+  }
+
+  function drawMinimap() {
+    const w = world, map = w.map, s = mm.width / map.W;
+    mmg.imageSmoothingEnabled = true;
+    mmg.drawImage(R.tex.mini, 0, 0, mm.width, mm.height);
+    const CS = P.CS, CW = w.CW;
+    for (let cy = 0; cy < w.CH; cy++) for (let cx = 0; cx < CW; cx++) {
+      const k = cy * CW + cx, p = w.densP[k], q = w.densPol[k], gs = w.gas[k];
+      if (p > 0.5) { mmg.fillStyle = `rgba(255,${Math.max(40, 160 - p * 6)},60,${Math.min(0.95, 0.25 + p / 25)})`; mmg.fillRect(cx * CS * s, cy * CS * s, CS * s + 0.5, CS * s + 0.5); }
+      if (q > 0.5) { mmg.fillStyle = 'rgba(80,140,255,0.95)'; mmg.fillRect(cx * CS * s, cy * CS * s, CS * s + 0.5, CS * s + 0.5); }
+      if (gs > 0.2) { mmg.fillStyle = 'rgba(255,255,255,0.5)'; mmg.fillRect(cx * CS * s, cy * CS * s, CS * s, CS * s); }
+    }
+    mmg.fillStyle = '#ffb000';
+    for (const c of map.cars) if (c.state === 1) mmg.fillRect(c.cx * s - 1, c.cy * s - 1, 2.5, 2.5);
+    for (const lm of map.landmarks) {
+      mmg.strokeStyle = lm.owner === 'protest' ? '#ff4a3a' : '#5a8cff'; mmg.lineWidth = 1.5;
+      mmg.beginPath(); mmg.arc(lm.x * s, lm.y * s, lm.r * s, 0, 6.283); mmg.stroke();
+    }
+    const vw = canvas.width / cam.zoom * s, vh = canvas.height / cam.zoom * s;
+    mmg.strokeStyle = '#fff'; mmg.lineWidth = 1;
+    mmg.strokeRect((cam.x * s) - vw / 2, (cam.y * s) - vh / 2, vw, vh);
+  }
+
+  function audioState() {
+    const w = world;
+    let nearCrowd = 0, nearFire = 0;
+    const CS = P.CS, CW = w.CW, rad = 60 / Math.max(1, cam.zoom / 3);
+    const x0 = Math.max(0, ((cam.x - rad) / CS) | 0), x1 = Math.min(CW - 1, ((cam.x + rad) / CS) | 0);
+    const y0 = Math.max(0, ((cam.y - rad) / CS) | 0), y1 = Math.min(w.CH - 1, ((cam.y + rad) / CS) | 0);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) nearCrowd += w.densP[y * CW + x];
+    for (const c of w.map.cars) if (c.state === 1 && Math.abs(c.cx - cam.x) < rad && Math.abs(c.cy - cam.y) < rad) nearFire++;
+    return { nearCrowd: nearCrowd * Math.min(1, 3 / cam.zoom + 0.4), nearFire, panic: w.avgPanic || 0, trucks: w.trucks.length, paused };
+  }
+
+  // ------------------------------------------------------------ loop
+  function frame(now) {
+    requestAnimationFrame(frame);
+    let dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (!world) { drawMenuBackdrop(dt); return; }
+
+    // camera
+    const pan = 520 / cam.zoom * dt;
+    if (keys.KeyW || keys.ArrowUp) cam.y -= pan;
+    if (keys.KeyS || keys.ArrowDown) cam.y += pan;
+    if (keys.KeyA || keys.ArrowLeft) cam.x -= pan;
+    if (keys.KeyD || keys.ArrowRight) cam.x += pan;
+    if (settings.edge && !paused && document.hasFocus()) {
+      const m = 8;
+      if (mouse.x < m) cam.x -= pan; if (mouse.x > canvas.width - m) cam.x += pan;
+      if (mouse.y < m) cam.y -= pan; if (mouse.y > canvas.height - m) cam.y += pan;
+    }
+    const before = toWorld(mouse.x, mouse.y);
+    cam.zoom += (cam.tz - cam.zoom) * Math.min(1, dt * 12);
+    const after = toWorld(mouse.x, mouse.y);
+    cam.x += before.x - after.x; cam.y += before.y - after.y;
+    const hw = canvas.width / 2 / cam.zoom, hh = canvas.height / 2 / cam.zoom;
+    cam.x = hw * 2 >= world.map.W ? world.map.W / 2 : P.clamp(cam.x, hw, world.map.W - hw);
+    cam.y = hh * 2 >= world.map.H ? world.map.H / 2 : P.clamp(cam.y, hh, world.map.H - hh);
+
+    if (!paused) {
+      acc += dt * speed;
+      let steps = 0;
+      while (acc >= P.SIM_DT && steps < 3 * speed) { world.tick(P.SIM_DT); acc -= P.SIM_DT; steps++; }
+      if (steps >= 3 * speed) acc = 0; // can't keep up: drop time rather than spiral
+      handleEvents();
+    }
+    R.draw(cam, paused ? 0 : dt, { overlay });
+    if (captionT > 0) { captionT -= dt; if (captionT <= 0) $('caption').classList.remove('show'); }
+    if (tipT > 0) { tipT -= dt; if (tipT <= 0) $('tip').classList.remove('show'); }
+    R.miniT = (R.miniT || 0) - dt;
+    if (R.miniT <= 0) { R.miniT = 0.25; drawMinimap(); updateHUD(); }
+    audio.update(dt, audioState());
+    if (settings.fps) {
+      fpsT += dt; fpsN++;
+      if (fpsT > 0.5) { $('fps').textContent = Math.round(fpsN / fpsT) + ' fps · ' + world.crowd.n + ' agents'; fpsT = 0; fpsN = 0; }
+    }
+  }
+
+  // live city behind the main menu
+  let menuWorld = null, menuT = 0;
+  function drawMenuBackdrop(dt) {
+    if (!menuWorld) {
+      menuWorld = new P.World(Object.assign(P.sandboxLevel({ side: S.POLICE, pop: 9000, size: 256, squads: 4, night: false, seed: 7 }), { startFrac: 0.8 }), { crowdScale: 1 });
+      R.setWorld(menuWorld);
+      cam.x = menuWorld.map.landmarks[0].x; cam.y = menuWorld.map.landmarks[0].y; cam.zoom = 2.6;
+    }
+    if (R.w !== menuWorld) R.setWorld(menuWorld);
+    menuT += dt;
+    menuWorld.tick(P.SIM_DT);
+    menuWorld.events.length = 0;
+    cam.x += Math.cos(menuT * 0.05) * dt * 3; cam.y += Math.sin(menuT * 0.04) * dt * 2;
+    cam.zoom = 2.6;
+    R.draw(cam, dt, null);
+  }
+
+  $('ver').textContent = P.VERSION;
+  if (!globalThis.steam) $('btnQuit').classList.toggle('hidden', !/Electron/i.test(navigator.userAgent));
+  audio.setVolume(settings.vol);
+  show('mainMenu');
+  requestAnimationFrame(frame);
+
+  // test hook (used by the smoke test; harmless in game)
+  P.debug = { get world() { return world; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
+})();
