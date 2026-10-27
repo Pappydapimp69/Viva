@@ -4,15 +4,15 @@
 **Genres / tags:** Strategy, Simulation, Real-Time Strategy, Sandbox, City, Physics, Top-Down, Indie, Singleplayer, Destruction.
 
 ## Short description
-Manage 100,000 people in a Paris riot. Lead the manif or hold the line: real crowd physics, fire that spreads on its own, tear gas vs fireworks, barricades, pompiers — until all of Paris burns.
+One city, up to 100,000 simulated people, two sides. March the crowd or command the CRS: crowd physics, car fires that jump with the wind, tear gas, mortars, barricades and fire trucks.
 
 ## About this game
-The French are protesting. Again.
-- **Lead the protest.** March your blocs on République and Bastille. The crowd finds every gap.
-- **Infiltrate the casseurs.** They hunt parked cars. Fire spreads car to car, with the wind.
-- **…or play the police.** Form shield lines that span the street, charge, gas, kettle.
-- **Or play the pompiers.** Send the fire trucks through the crowd before the arrondissement goes up.
-- **Capture the landmarks.** Fireworks vs shields. Night falls.
+Saturday, 2 PM, République.
+- **Lead the protest.** March your blocs on République and Bastille. Block one street and they take the next.
+- **Radicalise the bloc.** Casseurs hunt parked cars, and flames jump car to car with the wind.
+- **Switch sides.** Command CRS companies: shield lines that span the street, charges, gas, kettles.
+- **Send the trucks.** Push fire engines through the crowd before the arrondissement goes up.
+- **Take the squares.** Mortars against shields after dark.
 - **Sandbox** with up to 100,000 simulated people.
 
 All events, places-as-depicted and messages are fictional; the city is procedurally generated.

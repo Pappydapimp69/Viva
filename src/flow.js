@@ -1,6 +1,6 @@
 // Flow fields: one Dijkstra pass from a goal set gives every tile a distance
 // and a downhill direction, so thousands of agents path for the price of one.
-// The crowd "finds every gap" because the field routes around whatever is solid.
+// Block a street and the field simply routes everyone around it.
 (function () {
   const P = globalThis.PAVE;
 

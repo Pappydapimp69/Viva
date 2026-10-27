@@ -1,12 +1,12 @@
 # PAVÉ — Paris Riot Manager
 
-A top-down crowd-physics strategy game, built from the "Managing 100,000 People in a Paris Riot" trailer.
+A top-down crowd-physics strategy game: one city, up to 100,000 simulated people, two sides.
 Lead the manif, or command the CRS. Target price on Steam: **$4.99**.
 
 **Play in the browser:** GitHub Pages (deployed by `.github/workflows/pages.yml`).
 
 ## Features
-- Tens of thousands of simulated people (up to 100k in Sandbox) with real crowd physics: flow-field pathing, pressure, panic. The crowd finds every gap.
+- Tens of thousands of simulated people (up to 100k in Sandbox) with real crowd physics: flow-field pathing, pressure, panic. Block a street and people route around it.
 - Two sides, seven campaign levels + sandbox:
   - ✊ **Protest** — march blocs on landmarks, infiltrate casseurs, launch fireworks at shield lines, build barricades, mobilise the group chat.
   - 🛡 **Police** — form lines that span the street automatically, charge, tear gas, steel barriers, dispatch the pompiers, call reinforcements.

@@ -306,7 +306,7 @@
         const n = world.convertCasseurs(wx, wy, 8, 20);
         if (!n) return tip('No protesters there');
         spend(t.cost); audio.play('ui');
-        captionOnce('cass', 'INFILTRATE THE', 'CASSEURS');
+        captionOnce('cass', 'HOODS', 'UP');
         break;
       }
       case 'fireworks': {
@@ -315,7 +315,7 @@
         world.launchFireworks(world.crowd.x[i], world.crowd.y[i], wx, wy);
         spend(t.cost); world.cooldowns.fireworks = t.cd;
         audio.play('firework', camDist(wx, wy));
-        captionOnce('fw', 'FIREWORKS', 'VS SHIELDS');
+        captionOnce('fw', 'MORTARS', 'LAUNCHED');
         break;
       }
       case 'move': {
@@ -342,7 +342,7 @@
         const c = nearestBurning(wx, wy, 10);
         if (!c) return tip('Click a burning car');
         if (world.trucksOut >= world.trucksMax) return tip('All trucks are out (' + world.trucksMax + ')');
-        if (world.dispatchTruck(c)) { spend(t.cost); audio.play('order'); captionOnce('pomp', 'OR PLAY', 'THE POMPIERS'); }
+        if (world.dispatchTruck(c)) { spend(t.cost); audio.play('order'); captionOnce('pomp', 'TRUCK', 'ROLLING'); }
         else tip('No road to that fire');
         break;
       }
@@ -352,7 +352,7 @@
     const sq = world.squads[selSquad];
     if (!sq) return tip('Select a squad (click one, or 1–9)');
     if (charge) { if (world.authority < 5) return tip('Not enough authority'); world.authority -= 5; }
-    if (world.orderSquad(sq, wx, wy, charge)) { audio.play('order'); if (!charge) captionOnce('line', 'HOLD', 'THE LINE'); }
+    if (world.orderSquad(sq, wx, wy, charge)) { audio.play('order'); if (!charge) captionOnce('line', 'LINE', 'FORMED'); }
   }
   function camDist(x, y) { return Math.hypot(x - cam.x, y - cam.y) * (3 / cam.zoom); }
 
@@ -365,7 +365,7 @@
     if (maxT <= 0) return tip('Not enough ' + (kind === 1 ? 'momentum' : 'authority'));
     if (kind === 1 && nearestAgent((a.x + b.x) / 2, (a.y + b.y) / 2, (k) => k !== K.POL, 25) < 0) return tip('Build it near your people');
     const n = world.placeBarricade(a.x, a.y, b.x, b.y, kind, maxT);
-    if (n) { spend(n * t.cost); audio.play('barricade', camDist(a.x, a.y)); if (kind === 1) captionOnce('barr', 'BUILD', 'BARRICADES'); }
+    if (n) { spend(n * t.cost); audio.play('barricade', camDist(a.x, a.y)); if (kind === 1) captionOnce('barr', 'STREET', 'CLOSED'); }
   }
 
   // ------------------------------------------------------------ input
@@ -508,13 +508,13 @@
           $('carsBadge').classList.remove('bump'); void $('carsBadge').offsetWidth; $('carsBadge').classList.add('bump');
           if (world.stats.burned === 1) unlock('FIRST_FIRE');
           if (world.stats.burned >= 100) unlock('CENT');
-          if (e.by === 'spread') captionOnce('spread', 'FIRE SPREADS', 'ON ITS OWN');
+          if (e.by === 'spread') captionOnce('spread', 'IT\'S', 'CATCHING');
           break;
         case 'capture': audio.play(world.side === S.PROTEST ? 'capture' : 'lost'); caption('PLACE DE LA', e.name.toUpperCase(), 2.4); break;
         case 'retake': audio.play(world.side === S.PROTEST ? 'lost' : 'capture'); break;
         case 'gas': if (world.side === S.PROTEST) audio.play('gas', camDist(e.x, e.y)); break;
         case 'fireworks': if (world.side === S.POLICE) audio.play('firework', camDist(e.x, e.y)); break;
-        case 'burst': if (e.hit > 20) captionOnce('fw', 'FIREWORKS', 'VS SHIELDS'); break;
+        case 'burst': if (e.hit > 20) captionOnce('fw', 'MORTARS', 'LAUNCHED'); break;
         case 'charge': if (world.side === S.PROTEST && camDist(e.x, e.y) < 80) captionOnce('charge', 'THE', 'CHARGE'); break;
         case 'extinguished': if (world.stats.extinguished >= 25) unlock('POMPIER'); break;
         case 'win': case 'lose': end(); break;
