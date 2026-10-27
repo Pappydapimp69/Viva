@@ -226,7 +226,7 @@
       chat.me('tout le monde à ' + (world.blocs[selBloc].target >= 0 ? world.map.landmarks[world.blocs[selBloc].target].name : 'la manif') + ' 📣');
       tip('+' + n + ' protesters on the way');
     } else if (t.id === 'reinforce') {
-      const sq = world.addSquad(48);
+      const sq = world.addSquad(world.squadSize);
       if (sq) { buildSquadBar(); selSquad = sq.id; tip(sq.name + ' deployed'); }
     }
   }

@@ -68,3 +68,12 @@ test('police line forms across the street', () => {
   w.orderSquad(sq, s.c, w.map.H / 2 + 0.5, false, true);
   assert.strictEqual(sq.uy, 0, 'line is horizontal across a vertical street');
 });
+
+test('crowd density setting scales both sides, not just one', () => {
+  const lo = new P.World(P.LEVELS[2], { crowdScale: 0.5 }), hi = new P.World(P.LEVELS[2], { crowdScale: 2.5 });
+  const ratio = (w) => w.pop / (w.squads.length * w.squadSize);
+  const r = ratio(hi) / ratio(lo);
+  assert.ok(r > 0.6 && r < 1.7, 'protester-per-officer ratio drifted x' + r.toFixed(2));
+  const cass = (w) => w.pop * w.level.cassFrac / w.scale;
+  assert.ok(Math.abs(cass(hi) / cass(lo) - 1) < 1e-9, 'casseur count should not scale with density');
+});

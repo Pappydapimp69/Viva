@@ -64,7 +64,7 @@
       if (Math.hypot(gx - sq.ax, gy - sq.ay) > 7) w.orderSquad(sq, gx, gy, false, false);
       // gas the crowd pressing the line
       const front = densAround(w, w.densP, sq.ax + sq.nx * 7, sq.ay + sq.ny * 7, 2);
-      if (front.sum > (lv.aiGasAt || 70) && this.gasCd <= 0 && w.aiAuthority >= 10) {
+      if (front.sum > (lv.aiGasAt || 70) * w.scale && this.gasCd <= 0 && w.aiAuthority >= 10) {
         w.throwGas(sq.ax, sq.ay, front.x, front.y);
         w.aiAuthority -= 10; this.gasCd = lv.aiGasCd || 7;
       }
@@ -72,7 +72,7 @@
     // reinforcements
     if (this.reinforceT > (lv.aiReinforce || 75) && w.squads.length < (lv.maxSquads || 10) && w.aiAuthority >= 30) {
       this.reinforceT = 0; w.aiAuthority -= 30;
-      const sq = w.addSquad(lv.squadSize || 48);
+      const sq = w.addSquad(w.squadSize);
       if (sq) {
         // reinforce the landmark under most pressure
         let best = lms[0], bp = -1;

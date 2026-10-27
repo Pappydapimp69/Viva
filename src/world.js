@@ -76,8 +76,12 @@
 
     // police squads
     this.squads = [];
+    // The crowd-density setting must scale BOTH sides (Brain: a setting that tunes a
+    // shared rule in an asymmetric game is secretly easy mode for one role).
+    this.scale = sizeMul;
+    this.squadSize = Math.max(24, Math.min(96, Math.round((level.squadSize || 48) * sizeMul)));
     const nsq = level.squads || 4;
-    for (let s = 0; s < nsq; s++) this.addSquad(level.squadSize || 48, true);
+    for (let s = 0; s < nsq; s++) this.addSquad(this.squadSize, true);
     // initial deployment: guard landmarks
     this.squads.forEach((sq, i) => {
       const lm = lms[i % lms.length];
@@ -221,7 +225,7 @@
   // ---------------- spawning -----------------
   World.prototype.spawnProtesters = function (count, scatter, at) {
     const map = this.map, cr = this.crowd;
-    const cassFrac = this.level.cassFrac != null ? this.level.cassFrac : 0.006;
+    const cassFrac = (this.level.cassFrac != null ? this.level.cassFrac : 0.006) / (this.scale || 1); // same casseur count at any density
     let made = 0;
     for (let i = 0; i < count; i++) {
       if (cr.n >= this.cap - 8) break;
