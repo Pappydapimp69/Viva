@@ -75,13 +75,26 @@ async function run(side, dev) {
     const t = await target();
     const w = (fn) => ev(fn);
     switch (title) {
-      case 'Look around': if (dev === 'pad') { await axes([0.9, 0, 0, 0]); await sleep(700); await axes([0, 0, 0, 0]); } else { await p.keyboard.down('d'); await sleep(700); await p.keyboard.up('d'); } break;
-      case 'Zoom': if (dev === 'pad') { await press(7, true); await sleep(800); await press(7, false); } else { await p.mouse.move(800, 450); for (let k = 0; k < 6; k++) { await p.mouse.wheel(0, -200); await sleep(60); } } break;
+      case 'Look around': {
+        // pan toward the middle of the map (the camera starts near an edge it can't pass)
+        const dir = await ev(() => { const c = PAVE.debug.cam, m = PAVE.debug.world.map; return { x: Math.sign(m.W / 2 - c.x) || 1, y: Math.sign(m.H / 2 - c.y) || 1 }; });
+        if (dev === 'pad') { await axes([0.7 * dir.x, 0.7 * dir.y, 0, 0]); await sleep(900); await axes([0, 0, 0, 0]); }
+        else { const kx = dir.x > 0 ? 'd' : 'a', ky = dir.y > 0 ? 's' : 'w'; await p.keyboard.down(kx); await p.keyboard.down(ky); await sleep(900); await p.keyboard.up(kx); await p.keyboard.up(ky); }
+        break;
+      }
+      case 'Zoom in': if (dev === 'pad') { await press(7, true); await sleep(800); await press(7, false); } else { await p.mouse.move(800, 450); for (let k = 0; k < 6; k++) { await p.mouse.wheel(0, -200); await sleep(60); } } break;
       case 'This is your bloc': case 'Momentum is everything': case 'Authority': await sleep(450); if (dev === 'pad') await tap(0); else await key('Enter'); break;
       case 'March on the square': case 'Radicalise': case 'Select a squad': case 'Charge the casseurs': case 'Call the pompiers':
         if (title === 'Charge the casseurs') { if (dev === 'pad') await toolUntil('charge'); else await key('c'); }
         if (title === 'Call the pompiers') { if (dev === 'pad') await toolUntil('truck'); else await key('f'); }
-        await act(t); break;
+        if (process.env.TUT_DEBUG && title === 'Charge the casseurs') {
+          const info = await ev((t) => { const c = PAVE.debug.cam, w = PAVE.debug.world; const sx = (t.x - c.x) * c.zoom + 800, sy = (t.y - c.y) * c.zoom + 450;
+            return { t, tool: PAVE.debug.tool, sel: PAVE.debug.selSquad, auth: w.authority, hit: document.elementFromPoint(sx, sy) && document.elementFromPoint(sx, sy).id, sx, sy }; }, t);
+          console.log('DEBUG before', JSON.stringify(info));
+        }
+        await act(t);
+        if (process.env.TUT_DEBUG && title === 'Charge the casseurs') console.log('DEBUG after', JSON.stringify(await ev(() => ({ tip: document.getElementById('tip').textContent, ch: PAVE.debug.world.squads.map((q) => q.charge) }))));
+        break;
       case 'Take the square': case 'Fire spreads':
         if (dev === 'pad') { await tap(8); await tap(8); } else { await key('Tab'); await key('Tab'); }
         await waitStepChange(title, 150000);

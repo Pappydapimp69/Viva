@@ -18,20 +18,25 @@
       mk: MOUSE_PAN,
       pad: 'Push the <b>left stick</b> to move the camera. The ring in the middle of the screen is your cursor.',
       setup(t) { t.s.travel = 0; t.s.lx = t.cam.x; t.s.ly = t.cam.y; },
-      tick(t) { t.s.travel += Math.hypot(t.cam.x - t.s.lx, t.cam.y - t.s.ly); t.s.lx = t.cam.x; t.s.ly = t.cam.y; },
+      tick(t) {
+        // count only steady player panning: ignore the opening frames and any jump (camera clamps, recentres)
+        const d = Math.hypot(t.cam.x - t.s.lx, t.cam.y - t.s.ly);
+        if (t.t > 0.3 && d < 40) t.s.travel += d;
+        t.s.lx = t.cam.x; t.s.ly = t.cam.y;
+      },
       done: (t) => t.s.travel > 30,
     },
     zoom: {
-      title: 'Zoom',
-      mk: 'Zoom in and out with the <b>mouse wheel</b>.',
-      pad: 'Zoom with the <b>right stick</b> (up and down) or the triggers: ' + btn('LT') + ' out, ' + btn('RT') + ' in.',
+      title: 'Zoom in',
+      mk: 'Roll the <b>mouse wheel</b> forward to zoom in on the streets. Roll it back any time to see the whole city.',
+      pad: 'Zoom in with ' + btn('RT') + ' (or push the <b>right stick</b> up). ' + btn('LT') + ' zooms back out to see the whole city.',
       setup(t) { t.s.z0 = t.cam.tz; },
-      done: (t) => t.cam.tz > t.s.z0 * 1.5 || t.cam.tz < t.s.z0 / 1.5,
+      done: (t) => t.cam.tz > t.s.z0 * 1.5,
     },
   };
 
   const PROTEST = [
-    COMMON.camera, COMMON.zoom,
+    COMMON.zoom, COMMON.camera,
     {
       title: 'This is your bloc', info: true,
       mk: 'All those dots are your people. You never move them one by one: you give the whole <b>bloc</b> a destination and each person finds their own way there, around anything in the way.',
@@ -116,7 +121,7 @@
   ];
 
   const POLICE = [
-    COMMON.camera, COMMON.zoom,
+    COMMON.zoom, COMMON.camera,
     {
       title: 'Select a squad',
       mk: 'The blue lines are your CRS companies. <b>Left-click</b> the marked squad, <b>{sq1}</b>, or press ' + kb('2') + '.',
@@ -156,13 +161,22 @@
       setup(t) {
         t.w.authority = Math.max(t.w.authority, 60);
         const sq = t.w.squads[t.api.selSquad] || t.w.squads[1], b = t.w.nearestBloc(sq.ax, sq.ay);
-        if (b) t.w.convertCasseurs(b.cx, b.cy, 12, 25);
+        // radicalise a group in the crowd nearest the squad, and mark THAT group
+        const m = t.w.map, lm = m.landmarks[0];
+        const p = b && Math.hypot(b.cx - sq.ax, b.cy - sq.ay) < 60 ? { x: b.cx, y: b.cy } : { x: sq.ax + sq.nx * 14, y: sq.ay + sq.ny * 14 };
+        const o = m.nearestOpen(p.x, p.y, 12) || lm;
+        t.s.g = { x: o.x, y: o.y };
+        if (!t.w.convertCasseurs(o.x, o.y, 12, 25)) {
+          for (let k = 0; k < 25; k++) { const q = m.nearestOpen(o.x + (k % 5) - 2, o.y + ((k / 5) | 0) - 2, 4); if (q) t.w.crowd.add(K.CASS, q.x, q.y, 0); }
+        }
       },
       at: (t) => {
-        const cr = t.w.crowd, sq = t.w.squads[t.api.selSquad] || t.w.squads[0];
-        let best = null, bd = Infinity;
-        for (let i = 0; i < cr.n; i += 2) if (cr.kind[i] === K.CASS) { const d = (cr.x[i] - sq.ax) ** 2 + (cr.y[i] - sq.ay) ** 2; if (d < bd) { bd = d; best = { x: cr.x[i], y: cr.y[i], r: 5 }; } }
-        return best;
+        // follow the group as it moves: centroid of casseurs near where it was made
+        const cr = t.w.crowd, g = t.s.g;
+        let sx = 0, sy = 0, n = 0;
+        for (let i = 0; i < cr.n; i++) if (cr.kind[i] === K.CASS) { const d = (cr.x[i] - g.x) ** 2 + (cr.y[i] - g.y) ** 2; if (d < 400) { sx += cr.x[i]; sy += cr.y[i]; n++; } }
+        if (n) { g.x = sx / n; g.y = sy / n; }
+        return { x: g.x, y: g.y, r: 6 };
       },
       ev: (e) => e.type === 'charge',
     },

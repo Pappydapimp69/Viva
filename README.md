@@ -15,12 +15,13 @@ Lead the manif, or command the CRS. Target price on Steam: **$4.99**.
 - Night levels with streetlights and fire glow.
 - In-game phone: the bloc's group chat or the préfecture radio reacts to what happens.
 - Full gamepad support (standard layout: Xbox / PlayStation / Switch Pro in browser and Steam): virtual cursor, every tool, spatial menu navigation.
+- Step-by-step tutorials for both sides, written for whichever input you use (mouse & keyboard or controller), switching live.
 - 100% procedural art and audio — no asset files.
 
 ## Run
 - Browser: open `index.html` (no build step, no server needed).
 - Desktop: `npm install && npm start` (Electron).
-- Tests: `npm test` (sim unit tests), `npm run smoke` (headless Chromium, needs Playwright), `node test/gamepad.js` (fake controller drives menus and both sides).
+- Tests: `npm test` (sim unit tests), `npm run smoke` (headless Chromium, needs Playwright), `node test/gamepad.js` (fake controller drives menus and both sides), `node test/tutorial.js` (plays both tutorials end to end with mouse+keyboard and with a controller).
 - Bench: `node tools/bench.js <levelIndex> <seconds> <crowdScale> [bot]`.
 
 ## Ship to Steam
