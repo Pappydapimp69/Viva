@@ -24,7 +24,8 @@
   })();
   const FLAG_COLS = ['#e0302f', '#2ea05a', '#8b3fc0', '#1f63e0', '#f0c419'].map((h) => { const c = hexToRgb(h); return abgr(c[0], c[1], c[2]); });
   const CASS_COL = abgr(14, 14, 16), CASS_HI = abgr(40, 40, 44);
-  const POL_COL = abgr(28, 40, 74), POL_HI = abgr(92, 112, 158), POL_STUN = abgr(160, 150, 90);
+// police must read against dark winter coats: bright blue, white helmet, dark rim
+  const POL_COL = abgr(38, 110, 240), POL_HI = abgr(235, 242, 255), POL_RIM = abgr(8, 18, 52), POL_STUN = abgr(240, 200, 60);
   const LEAVE_COL = abgr(110, 110, 110);
 
   // ------------------------------------------------------------ sprites
@@ -421,6 +422,14 @@
     g.drawImage(this.agentCanvas, 0, 0);
     g.setTransform(z, 0, 0, z, ox, oy);
 
+    // a faint ring around each police squad so lines read inside a crowd
+    g.lineWidth = Math.max(0.25, 1.5 / z);
+    for (const sq of w.squads) {
+      if (!sq.cnt || sq.mx < vx0 - 20 || sq.mx > vx1 + 20 || sq.my < vy0 - 20 || sq.my > vy1 + 20) continue;
+      g.strokeStyle = sq.charge > 0 ? 'rgba(255,110,90,0.55)' : 'rgba(90,160,255,0.45)';
+      g.beginPath(); g.arc(sq.mx, sq.my, Math.sqrt(sq.cnt) * 0.75 + 1.5, 0, 6.283); g.stroke();
+    }
+
     // fire trucks
     for (const tr of w.trucks) {
       g.save(); g.translate(tr.x, tr.y); g.rotate(tr.a);
@@ -598,12 +607,20 @@
         if (sx < 0 || sy < 0 || sx >= cw - 1 || sy >= ch - 1) continue;
         const k = kind[i];
         let c;
-        if (k === K.POL) c = stun[i] > 0 ? POL_STUN : POL_COL;
+        if (k === K.POL) continue; // drawn on top, below
         else if (k === K.CASS) c = CASS_COL;
         else c = flags[i] & P.AF.FLAG ? FLAG_COLS[col[i] % 5] : flags[i] & P.AF.LEAVING ? LEAVE_COL : PROT_COLS[col[i]];
         const o = sy * cw + sx;
         buf[o] = c;
         if (big) { buf[o + 1] = c; buf[o + cw] = c; buf[o + cw + 1] = c; }
+      }
+      // police on top, always 2x2 with a white helmet pixel, whatever the zoom
+      for (let i = 0; i < n; i++) {
+        if (kind[i] !== K.POL) continue;
+        const sx = (X[i] * z + ox) | 0, sy = (Y[i] * z + oy) | 0;
+        if (sx < 1 || sy < 1 || sx >= cw - 2 || sy >= ch - 2) continue;
+        const o = sy * cw + sx, c = stun[i] > 0 ? POL_STUN : POL_COL;
+        buf[o] = POL_HI; buf[o + 1] = c; buf[o + cw] = c; buf[o + cw + 1] = c;
       }
     } else {
       if (this.discCache.r !== Math.round(r * 4)) {
@@ -621,11 +638,31 @@
         if (sx < ext || sy < ext || sx >= cw - ext || sy >= ch - ext) continue;
         const k = kind[i];
         let c, h;
-        if (k === K.POL) { c = stun[i] > 0 ? POL_STUN : POL_COL; h = POL_HI; }
+        if (k === K.POL) continue; // drawn on top, below
         else if (k === K.CASS) { c = CASS_COL; h = CASS_HI; }
         else { c = flags[i] & P.AF.FLAG ? FLAG_COLS[col[i] % 5] : flags[i] & P.AF.LEAVING ? LEAVE_COL : PROT_COLS[col[i]]; h = c; }
         const o = sy * cw + sx;
         for (let q = 0; q < m; q++) buf[o + off[2 * q + 1] * cw + off[2 * q]] = hi[q] ? h : c;
+      }
+      // police on top: a slightly bigger disc with a dark rim and a white helmet
+      const pr = r * 1.2 + 0.6, key = Math.round(pr * 4);
+      if (!this.polDisc || this.polDisc.key !== key) {
+        const rr = key / 4, R2 = rr * rr, inner = (rr - 1) * (rr - 1), po = [], pk = [];
+        for (let dy = -Math.ceil(rr); dy <= Math.ceil(rr); dy++) for (let dx = -Math.ceil(rr); dx <= Math.ceil(rr); dx++) {
+          const d2 = (dx + 0.5) * (dx + 0.5) + (dy + 0.5) * (dy + 0.5);
+          if (d2 > R2) continue;
+          po.push(dx, dy);
+          pk.push(d2 > inner ? 2 : d2 < R2 * 0.18 ? 1 : 0); // 2 rim, 1 helmet, 0 body
+        }
+        this.polDisc = { key, po, pk, ext: Math.ceil(rr) + 1 };
+      }
+      const po = this.polDisc.po, pk = this.polDisc.pk, pe = this.polDisc.ext, pm = pk.length;
+      for (let i = 0; i < n; i++) {
+        if (kind[i] !== K.POL) continue;
+        const sx = (X[i] * z + ox) | 0, sy = (Y[i] * z + oy) | 0;
+        if (sx < pe || sy < pe || sx >= cw - pe || sy >= ch - pe) continue;
+        const o = sy * cw + sx, c = stun[i] > 0 ? POL_STUN : POL_COL;
+        for (let q = 0; q < pm; q++) buf[o + po[2 * q + 1] * cw + po[2 * q]] = pk[q] === 2 ? POL_RIM : pk[q] === 1 ? POL_HI : c;
       }
     }
     this.ag.putImageData(this.img, 0, 0);

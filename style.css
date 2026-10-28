@@ -188,3 +188,9 @@ body.pad .padOnly { display: inline-block; }
 .pb-a { background: #5fd35f; } .pb-b { background: #ff6b5b; }
 #resWhy { font-size: 11px; color: var(--mut); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #resWhy b.up { color: #7dff9a; } #resWhy b.down { color: #ff7d7d; }
+/* the HUD box covers the whole view (for the screen margin) but must never eat
+   clicks or the mouse wheel meant for the map: only its panels are interactive */
+#hud { pointer-events: none; }
+#hud > * { pointer-events: auto; }
+#hud > #caption, #hud > #tip, #hud > #fps, #hud > #tutorial { pointer-events: none; }
+#tutorial button { pointer-events: auto; }
