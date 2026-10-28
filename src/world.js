@@ -89,6 +89,15 @@
       const o = map.nearestOpen(lm.x + Math.cos(ang) * (lm.r - 4), lm.y + Math.sin(ang) * (lm.r - 4), 10) || lm;
       this.orderSquad(sq, o.x, o.y, false, true);
     });
+    // the police are already deployed when the day starts: put each officer on its post
+    {
+      const cr = this.crowd;
+      for (let i = 0; i < cr.n; i++) {
+        if (cr.kind[i] !== K.POL) continue;
+        const sq = this.squads[cr.grp[i]], s = cr.slot[i];
+        if (sq && s < sq.slotX.length && map.walkable(sq.slotX[s], sq.slotY[s])) { cr.x[i] = sq.slotX[s]; cr.y[i] = sq.slotY[s]; }
+      }
+    }
 
     // starting crowd
     this.spawnProtesters(Math.round(this.pop * (level.startFrac || 0.45)), true);

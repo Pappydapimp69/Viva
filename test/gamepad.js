@@ -29,7 +29,9 @@ const path = require('path');
   ok(await p.evaluate(() => PAVE.debug.padFocus.textContent.trim()) === 'CAMPAIGN', 'first press lands on the primary button: ' + await p.evaluate(() => PAVE.debug.padFocus.textContent.trim()));
   // go to top (CAMPAIGN) and press A
   for (let i = 0; i < 6; i++) await tap(12);
-  ok(await p.evaluate(() => PAVE.debug.padFocus.textContent.trim()) === 'CAMPAIGN', 'D-pad up reaches CAMPAIGN');
+  ok(/^TUTORIAL/.test(await p.evaluate(() => PAVE.debug.padFocus.textContent.trim())), 'D-pad up reaches TUTORIAL at the top');
+  await tap(13);
+  ok(await p.evaluate(() => PAVE.debug.padFocus.textContent.trim()) === 'CAMPAIGN', 'D-pad down reaches CAMPAIGN');
   await tap(0);
   await until(() => PAVE.debug.screen === 'campaignMenu');
   ok(true, 'A opens the campaign');
