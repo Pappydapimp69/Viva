@@ -194,3 +194,5 @@ body.pad .padOnly { display: inline-block; }
 #hud > * { pointer-events: auto; }
 #hud > #caption, #hud > #tip, #hud > #fps, #hud > #tutorial { pointer-events: none; }
 #tutorial button { pointer-events: auto; }
+#energyRow { margin-top: 6px; }
+#enFill { height: 100%; width: 60%; background: linear-gradient(90deg, #ffe066, var(--y)); transition: width .2s; }

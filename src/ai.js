@@ -122,7 +122,7 @@
       }
     }
     // fireworks at the closest police line
-    if (this.fwT <= 0 && w.momentum > 8) {
+    if (this.fwT <= 0 && w.energy > 8) {
       let best = null, bd = 32;
       for (const sq of w.squads) for (const b of w.blocs) {
         if (b.n < 50) continue;
@@ -131,7 +131,7 @@
       }
       if (best) {
         w.launchFireworks(best.b.cx, best.b.cy, best.sq.ax, best.sq.ay);
-        w.addMom('spent', -3);
+        w.energy -= 3;
         this.fwT = lv.aiFireworks || 14;
       } else this.fwT = 3;
     }

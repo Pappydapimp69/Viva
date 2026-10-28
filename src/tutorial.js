@@ -60,10 +60,10 @@
     },
     {
       title: 'Pick a tool',
-      mk: 'Tools cost <b>momentum</b> (the orange bar, top right). Press ' + kb('2') + ' or click the <b>Casseurs</b> button.',
-      pad: 'Tools cost <b>momentum</b> (the orange bar, top right). Press ' + btn('LB') + ' / ' + btn('RB') + ' until <b>CASSEURS</b> is selected.',
+      mk: 'Tools cost <b>energy</b> (the yellow bar, top right). It refills on its own. Press ' + kb('2') + ' or click the <b>Casseurs</b> button.',
+      pad: 'Tools cost <b>energy</b> (the yellow bar, top right). It refills on its own. Press ' + btn('LB') + ' / ' + btn('RB') + ' until <b>CASSEURS</b> is selected.',
       hi: '#tool_casseurs',
-      setup(t) { t.w.momentum = Math.max(t.w.momentum, 60); },
+      setup(t) { t.w.energy = Math.max(t.w.energy, 60); },
       done: (t) => t.api.tool === 'casseurs',
     },
     {
@@ -91,7 +91,7 @@
         const b = t.w.blocs[0], sq = t.w.squads[0], lm1 = t.w.map.landmarks[1] || t.w.map.landmarks[0];
         const dx = lm1.x - b.cx, dy = lm1.y - b.cy, d = Math.hypot(dx, dy) || 1;
         t.w.orderSquad(sq, b.cx + dx / d * 22, b.cy + dy / d * 22, false, true);
-        t.w.momentum = Math.max(t.w.momentum, 40);
+        t.w.energy = Math.max(t.w.energy, 40);
       },
       at: (t) => { const sq = t.w.squads[0]; return { x: sq.mx != null ? sq.mx : sq.ax, y: sq.my != null ? sq.my : sq.ay, r: 6 }; },
       ev: (e, t) => { const sq = t.w.squads[0]; return e.type === 'fireworks' && Math.min(Math.hypot(e.x - sq.ax, e.y - sq.ay), Math.hypot(e.x - (sq.mx || sq.ax), e.y - (sq.my || sq.ay))) < 14; },
@@ -101,7 +101,7 @@
       mk: 'Press ' + kb('4') + ' for <b>Barricade</b>, then <b>click and drag</b> across a street near your people. Your people walk straight through it; police have to beat it down.',
       pad: 'Press ' + btn('RB') + ' until <b>BARRICADE</b>. <b>Hold</b> ' + btn('A') + ', move across a street near your people, then <b>release</b>. Your people walk through it; police have to beat it down.',
       hi: '#tool_barricade',
-      setup(t) { t.w.momentum = Math.max(t.w.momentum, 40); },
+      setup(t) { t.w.energy = Math.max(t.w.energy, 40); },
       ev: (e) => e.type === 'barricade' && e.kind === 1,
     },
     {
@@ -109,14 +109,14 @@
       mk: 'Short of people? Press ' + kb('5') + ' to <b>Mobilise</b>: the group chat brings 800 more.',
       pad: 'Short of people? Press <b>D-pad up</b> to <b>Mobilise</b>: the group chat brings 800 more.',
       hi: '#tool_mobilise',
-      setup(t) { t.w.momentum = Math.max(t.w.momentum, 40); t.w.cooldowns.mobilise = 0; },
+      setup(t) { t.w.energy = Math.max(t.w.energy, 40); t.w.cooldowns.mobilise = 0; },
       ev: (e) => e.type === 'mobilise',
     },
     {
-      title: 'Momentum is everything', info: true,
-      mk: 'The line under the bar shows where momentum comes from, per minute. Holding squares and burning cars earn the most; tear gas and arrests drain it. If it hits zero and the crowd melts away, you lose. Your other blocs: switch with ' + kb('Q') + '.',
-      pad: 'The line under the bar shows where momentum comes from, per minute. Holding squares and burning cars earn the most; tear gas and arrests drain it. If it hits zero and the crowd melts away, you lose. Your other blocs: switch with ' + btn('Y') + '.',
-      hi: '.resRow',
+      title: 'Crowd and energy', info: true,
+      mk: '<b>CROWD</b> (orange) is how many people your movement draws: taking squares and burning cars grow it, tear gas and arrests shrink it, and the line under it says why. If it collapses, you lose. <b>ENERGY</b> (yellow) is just what tools cost: it refills by itself, and spending it never costs you people. Switch blocs with ' + kb('Q') + '.',
+      pad: '<b>CROWD</b> (orange) is how many people your movement draws: taking squares and burning cars grow it, tear gas and arrests shrink it, and the line under it says why. If it collapses, you lose. <b>ENERGY</b> (yellow) is just what tools cost: it refills by itself, and spending it never costs you people. Switch blocs with ' + btn('Y') + '.',
+      hi: '#topRight',
     },
   ];
 

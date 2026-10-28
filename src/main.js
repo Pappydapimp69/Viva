@@ -159,7 +159,8 @@
       $('phoneTitle').textContent = prot ? 'BLOC 11e' : 'PC PRÉFECTURE';
       $('phoneAvatar').textContent = prot ? 'B' : 'P';
       $('phoneInput').firstChild.textContent = prot ? 'Message…' : 'Canal 3…';
-      $('resLabel').textContent = prot ? 'MOMENTUM' : 'AUTHORITY';
+      $('resLabel').textContent = prot ? 'CROWD' : 'AUTHORITY';
+      $('energyRow').classList.toggle('hidden', !prot);
       $('lvName').textContent = lv.name.toUpperCase();
       (lv.chat || []).forEach((m, i) => setTimeout(() => chat && chat.post(m, prot ? ['yanis', 'inès', 'sarah'][i % 3] : 'PC Préfecture'), 900 + i * 1400));
       // camera: start on the player's side
@@ -240,8 +241,9 @@
     { id: 'reinforce', key: 'R', ico: '🚐', name: 'REINFORCE', cost: 30, cd: 20, hint: 'Instant: a fresh CRS company' },
   ];
   const tools = () => (world && world.side === S.PROTEST ? PROT_TOOLS : POL_TOOLS);
-  function res() { return world.side === S.PROTEST ? world.momentum : world.authority; }
-  function spend(n) { if (world.side === S.PROTEST) world.addMom('spent', -n); else world.authority -= n; }
+  // what tools cost: ENERGY for the protest, AUTHORITY for the police
+  function res() { return world.side === S.PROTEST ? world.energy : world.authority; }
+  function spend(n) { if (world.side === S.PROTEST) world.energy = Math.max(0, world.energy - n); else world.authority -= n; }
 
   function buildToolbar() {
     const tb = $('toolbar');
@@ -264,7 +266,7 @@
   }
   function useInstant(t) {
     if ((world.cooldowns[t.id] || 0) > 0) return tip('Recharging…');
-    if (res() < t.cost) return tip('Not enough ' + (world.side === S.PROTEST ? 'momentum' : 'authority'));
+    if (res() < t.cost) return tip('Not enough ' + (world.side === S.PROTEST ? 'energy' : 'authority'));
     spend(t.cost); world.cooldowns[t.id] = t.cd || 0;
     if (t.id === 'mobilise') {
       const n = world.spawnProtesters(800, false);
@@ -335,7 +337,7 @@
     const t = tools().find((x) => x.id === tool);
     if (!t || !world) return;
     if ((world.cooldowns[t.id] || 0) > 0) return tip('Recharging…');
-    if (t.cost && t.id !== 'barricade' && t.id !== 'barrier' && res() < t.cost) return tip('Not enough ' + (world.side === S.PROTEST ? 'momentum' : 'authority'));
+    if (t.cost && t.id !== 'barricade' && t.id !== 'barrier' && res() < t.cost) return tip('Not enough ' + (world.side === S.PROTEST ? 'energy' : 'authority'));
     const map = world.map;
     switch (tool) {
       case 'march': {
@@ -413,7 +415,7 @@
     const len = Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) + 1;
     const afford = Math.floor(res() / t.cost);
     const maxT = Math.min(30, afford, Math.ceil(len) * 2);
-    if (maxT <= 0) return tip('Not enough ' + (kind === 1 ? 'momentum' : 'authority'));
+    if (maxT <= 0) return tip('Not enough ' + (kind === 1 ? 'energy' : 'authority'));
     if (kind === 1 && nearestAgent((a.x + b.x) / 2, (a.y + b.y) / 2, (k) => k !== K.POL, 25) < 0) return tip('Build it near your people');
     const n = world.placeBarricade(a.x, a.y, b.x, b.y, kind, maxT);
     if (n) { spend(n * t.cost); audio.play('barricade', camDist(a.x, a.y)); if (kind === 1) captionOnce('barr', 'STREET', 'CLOSED'); }
@@ -855,15 +857,24 @@
     $('timer').textContent = P.fmtTime(left);
     $('timer').classList.toggle('low', left < 30);
     const r = res();
-    $('resFill').style.width = r + '%';
-    $('resVal').textContent = Math.floor(r);
+    // top bar: CROWD (protest: how many people the movement draws) or AUTHORITY (police money)
+    const top = world.side === S.PROTEST ? w.momentum : w.authority;
+    $('resFill').style.width = top + '%';
+    $('resVal').textContent = Math.floor(top);
+    if (world.side === S.PROTEST) {
+      $('enFill').style.width = w.energy + '%';
+      $('enVal').textContent = Math.floor(w.energy);
+    }
     // why the bar moves: net rate and the biggest sources, per minute
     if (world.side === S.PROTEST) {
-      const NAMES = { crowd: 'crowd', squares: 'squares', fires: 'fires', fireworks: 'mortars', gas: 'tear gas', arrests: 'arrests', spent: 'spent', trucks: 'trucks' };
+      const NAMES = { crowd: 'word of mouth', squares: 'squares', fires: 'fires', fireworks: 'mortars', gas: 'tear gas', arrests: 'arrests', spent: 'spent', trucks: 'trucks' };
       const rs = Object.entries(w.momRate).filter(([, v]) => Math.abs(v) >= 0.5);
       const net = rs.filter(([k]) => k !== 'spent').reduce((a, [, v]) => a + v, 0);
       rs.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
-      $('resWhy').innerHTML = '<b class="' + (net >= 0 ? 'up' : 'down') + '">' + (net >= 0 ? '+' : '') + net.toFixed(0) + '/min</b> ' +
+      const target = w.targetPop(), now = w.protCount;
+      const trend = now < target * 0.97 ? '▲ ' + P.fmtNum(target) + ' want to join' : now > target * 1.15 ? '▼ people drifting home' : 'steady';
+      $('resWhy').innerHTML = P.fmtNum(now) + ' people · <b class="' + (now <= target ? 'up' : 'down') + '">' + trend + '</b><br>' +
+        '<b class="' + (net >= 0 ? 'up' : 'down') + '">' + (net >= 0 ? '+' : '') + net.toFixed(0) + '/min</b> ' +
         rs.filter(([k]) => k !== 'spent').slice(0, 3).map(([k, v]) => NAMES[k] + ' ' + (v >= 0 ? '+' : '') + v.toFixed(0)).join(' · ');
     } else $('resWhy').innerHTML = '<b class="up">+45/min</b> refills on its own';
     $('cProt').textContent = P.fmtNum(w.protCount - w.cassCount);

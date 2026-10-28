@@ -31,6 +31,8 @@
     this.momentum = level.momentum != null ? level.momentum : 50;
     // where momentum comes from, per source, as a smoothed per-minute rate (shown under the bar)
     this.momBucket = {}; this.momRate = {}; this.momT = 0;
+    // ENERGY: what protest tools cost. Refills on its own and never touches the crowd.
+    this.energy = level.energy != null ? level.energy : 60;
     this.authority = level.authority != null ? level.authority : 60;
     this.aiAuthority = 70;
     this.trucks = []; this.trucksMax = level.trucks != null ? level.trucks : 3; this.trucksOut = 0;
@@ -675,6 +677,7 @@
     if (this.protCount < this.pop * 0.15) this.addMom('crowd', -dt * 0.4);
     this.updateMomRates(dt);
     this.authority = Math.min(100, this.authority + dt * 0.75);
+    this.energy = Math.min(100, this.energy + dt * P.ENERGY_REGEN);
     this.aiAuthority = Math.min(100, this.aiAuthority + dt * (this.level.aiRegen || 0.7));
     for (const k in this.cooldowns) if (this.cooldowns[k] > 0) this.cooldowns[k] -= dt;
 
@@ -783,6 +786,7 @@
     const adv = prot / (pol * 4 + 25);
     return Math.min(12, Math.pow(adv, 0.75));
   };
+  P.ENERGY_REGEN = 0.8;    // protest tool energy per second (48/min)
   P.TRUCK_SURROUND = 16;   // crowd press (casseurs x2) that pins a truck
   P.TRUCK_ABANDON_S = 5;   // seconds pinned before the crew walks away
   P.TRUCK_RECOVER_S = 8;   // seconds clear before the crew returns

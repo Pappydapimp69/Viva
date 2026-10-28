@@ -83,7 +83,7 @@ async function run(side, dev) {
         break;
       }
       case 'Zoom in': if (dev === 'pad') { await press(7, true); await sleep(800); await press(7, false); } else { await p.mouse.move(800, 450); for (let k = 0; k < 6; k++) { await p.mouse.wheel(0, -200); await sleep(60); } } break;
-      case 'This is your bloc': case 'Momentum is everything': case 'Authority': await sleep(450); if (dev === 'pad') await tap(0); else await key('Enter'); break;
+      case 'This is your bloc': case 'Crowd and energy': case 'Authority': await sleep(450); if (dev === 'pad') await tap(0); else await key('Enter'); break;
       case 'March on the square': case 'Radicalise': case 'Select a squad': case 'Charge the casseurs': case 'Call the pompiers':
         if (title === 'Charge the casseurs') { if (dev === 'pad') await toolUntil('charge'); else await key('c'); }
         if (title === 'Call the pompiers') { if (dev === 'pad') await toolUntil('truck'); else await key('f'); }
