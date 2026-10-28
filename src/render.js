@@ -25,7 +25,7 @@
   const FLAG_COLS = ['#e0302f', '#2ea05a', '#8b3fc0', '#1f63e0', '#f0c419'].map((h) => { const c = hexToRgb(h); return abgr(c[0], c[1], c[2]); });
   const CASS_COL = abgr(14, 14, 16), CASS_HI = abgr(40, 40, 44);
 // police must read against dark winter coats: bright blue, white helmet, dark rim
-  const POL_COL = abgr(38, 110, 240), POL_HI = abgr(235, 242, 255), POL_RIM = abgr(8, 18, 52), POL_STUN = abgr(240, 200, 60);
+  const POL_COL = abgr(38, 110, 240), POL_HI = abgr(235, 242, 255), POL_RIM = abgr(8, 18, 52), POL_STUN = abgr(240, 200, 60), POL_HURT = abgr(150, 110, 210);
   const LEAVE_COL = abgr(110, 110, 110);
 
   // ------------------------------------------------------------ sprites
@@ -625,7 +625,7 @@
   Renderer.prototype.drawAgents = function (cam, ox, oy) {
     const w = this.w, cr = w.crowd, buf = this.buf, cw = this.cw, ch = this.ch, z = cam.zoom;
     buf.fill(0);
-    const n = cr.n, X = cr.x, Y = cr.y, kind = cr.kind, col = cr.col, flags = cr.flags, stun = cr.stun;
+    const n = cr.n, X = cr.x, Y = cr.y, kind = cr.kind, col = cr.col, flags = cr.flags, stun = cr.stun, hp = cr.hp;
     const r = z * 0.4;
     if (r < 1.1) {
       // 1–2 px dots
@@ -647,7 +647,7 @@
         if (kind[i] !== K.POL) continue;
         const sx = (X[i] * z + ox) | 0, sy = (Y[i] * z + oy) | 0;
         if (sx < 1 || sy < 1 || sx >= cw - 2 || sy >= ch - 2) continue;
-        const o = sy * cw + sx, c = stun[i] > 0 ? POL_STUN : POL_COL;
+        const o = sy * cw + sx, c = stun[i] > 0 ? POL_STUN : hp[i] < 0.6 ? POL_HURT : POL_COL;
         buf[o] = POL_HI; buf[o + 1] = c; buf[o + cw] = c; buf[o + cw + 1] = c;
       }
     } else {
@@ -689,7 +689,7 @@
         if (kind[i] !== K.POL) continue;
         const sx = (X[i] * z + ox) | 0, sy = (Y[i] * z + oy) | 0;
         if (sx < pe || sy < pe || sx >= cw - pe || sy >= ch - pe) continue;
-        const o = sy * cw + sx, c = stun[i] > 0 ? POL_STUN : POL_COL;
+        const o = sy * cw + sx, c = stun[i] > 0 ? POL_STUN : hp[i] < 0.6 ? POL_HURT : POL_COL;
         for (let q = 0; q < pm; q++) buf[o + po[2 * q + 1] * cw + po[2 * q]] = pk[q] === 2 ? POL_RIM : pk[q] === 1 ? POL_HI : c;
       }
     }

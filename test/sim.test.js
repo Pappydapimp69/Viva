@@ -220,3 +220,13 @@ test('capturing speeds up with more protesters, without an early plateau', () =>
   const secs = (n) => 1.2 / (0.006 * s(n));
   assert.ok(secs(2000) >= 15, 'a packed square still takes a moment: ' + secs(2000).toFixed(0) + 's');
 });
+
+test('fireworks hurt police: focused volleys injure and remove officers', () => {
+  const w = new P.World(P.LEVELS[2], {});
+  for (let i = 0; i < 60; i++) w.tick(P.SIM_DT);
+  const sq = w.squads[0], n0 = w.polCount;
+  for (let v = 0; v < 3; v++) { w.launchFireworks(sq.mx - 10, sq.my, sq.mx, sq.my); for (let i = 0; i < 150; i++) w.tick(P.SIM_DT); }
+  assert.ok((w.stats.injured || 0) > 0, 'officers injured');
+  w.updateGrids(0);
+  assert.ok(w.polCount < n0, 'injured officers left the field (' + n0 + ' -> ' + w.polCount + ')');
+});

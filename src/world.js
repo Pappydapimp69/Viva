@@ -618,14 +618,21 @@
       s.t += dt;
       if (s.t >= s.dur && !s.done) {
         s.done = true;
-        let hit = 0;
+        // mortars stun and hurt officers in the blast, most at the centre;
+        // an officer at zero health is evacuated and the squad shrinks
+        let hit = 0, injured = 0;
+        const R2 = P.FW_RADIUS * P.FW_RADIUS;
         for (let i = 0; i < cr.n; i++) {
           if (cr.kind[i] !== K.POL) continue;
-          const dx = cr.x[i] - s.x, dy = cr.y[i] - s.y;
-          if (dx * dx + dy * dy < 42) { cr.stun[i] = 2.5 + this.rng() * 2; hit++; }
+          const dx = cr.x[i] - s.x, dy = cr.y[i] - s.y, d2 = dx * dx + dy * dy;
+          if (d2 >= R2) continue;
+          cr.stun[i] = 2.5 + this.rng() * 2; hit++;
+          cr.hp[i] -= P.FW_DAMAGE * (1 - Math.sqrt(d2) / P.FW_RADIUS) * (0.7 + this.rng() * 0.6);
+          if (cr.hp[i] <= 0) { cr.kind[i] = K.DEAD; injured++; }
         }
-        if (hit) this.addMom('fireworks', 1.5);
-        this.emit('burst', { x: s.x, y: s.y, hit });
+        if (injured) { cr.compact(); this.stats.injured = (this.stats.injured || 0) + injured; }
+        if (hit) this.addMom('fireworks', 1.5 + injured * 0.5);
+        this.emit('burst', { x: s.x, y: s.y, hit, injured });
       }
     }
     this.shots = this.shots.filter((s) => !s.done);
@@ -786,6 +793,9 @@
     const adv = prot / (pol * 4 + 25);
     return Math.min(12, Math.pow(adv, 0.75));
   };
+  P.FW_RADIUS = 6.5;       // mortar blast radius (tiles)
+  P.FW_DAMAGE = 1.1;       // health taken at the centre of the blast (officers have 1)
+  P.POL_REGEN = 0.04;      // officer health regained per second
   P.ENERGY_REGEN = 0.8;    // protest tool energy per second (48/min)
   P.TRUCK_SURROUND = 16;   // crowd press (casseurs x2) that pins a truck
   P.TRUCK_ABANDON_S = 5;   // seconds pinned before the crew walks away

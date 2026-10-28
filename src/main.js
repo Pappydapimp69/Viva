@@ -803,7 +803,10 @@
         case 'retake': audio.play(world.side === S.PROTEST ? 'lost' : 'capture'); break;
         case 'gas': if (world.side === S.PROTEST) audio.play('gas', camDist(e.x, e.y)); break;
         case 'fireworks': if (world.side === S.POLICE) audio.play('firework', camDist(e.x, e.y)); break;
-        case 'burst': if (e.hit > 20) captionOnce('fw', 'MORTARS', 'LAUNCHED'); break;
+        case 'burst':
+          if (e.hit > 20) captionOnce('fw', 'MORTARS', 'LAUNCHED');
+          if (e.injured && camDist(e.x, e.y) < 90) tip(e.injured + ' officer' + (e.injured > 1 ? 's' : '') + ' injured');
+          break;
         case 'charge': if (world.side === S.PROTEST && camDist(e.x, e.y) < 80) captionOnce('charge', 'THE', 'CHARGE'); break;
         case 'extinguished': if (world.stats.extinguished >= 25) unlock('POMPIER'); break;
         case 'truckSurrounded':
@@ -828,7 +831,7 @@
     $('endStars').textContent = '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars);
     $('endWhy').textContent = r.why;
     $('endStats').innerHTML = [['Cars burned', st.burned], ['Arrests', st.arrests], ['Peak crowd', P.fmtNum(st.peak)],
-      ['Landmarks taken', st.captures], ['Tear gas', st.gasUsed], ['Fireworks', st.fireworks], ['Fires put out', st.extinguished],
+      ['Landmarks taken', st.captures], ['Officers injured', st.injured || 0], ['Tear gas', st.gasUsed], ['Fireworks', st.fireworks], ['Fires put out', st.extinguished],
       ['Time', P.fmtTime(r.time)]].map(([a, b]) => `<div>${a}<b>${b}</b></div>`).join('');
     const isCampaign = levelIdx >= 0;
     if (r.win && isCampaign) {
@@ -867,7 +870,7 @@
     }
     // why the bar moves: net rate and the biggest sources, per minute
     if (world.side === S.PROTEST) {
-      const NAMES = { crowd: 'word of mouth', squares: 'squares', fires: 'fires', fireworks: 'mortars', gas: 'tear gas', arrests: 'arrests', spent: 'spent', trucks: 'trucks' };
+      const NAMES = { crowd: 'word of mouth', squares: 'squares', fires: 'fires', fireworks: 'mortar hits', gas: 'tear gas', arrests: 'arrests', spent: 'spent', trucks: 'trucks' };
       const rs = Object.entries(w.momRate).filter(([, v]) => Math.abs(v) >= 0.5);
       const net = rs.filter(([k]) => k !== 'spent').reduce((a, [, v]) => a + v, 0);
       rs.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));

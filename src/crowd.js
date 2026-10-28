@@ -24,6 +24,7 @@
     this.flags = new Uint8Array(cap);
     this.panic = new Float32Array(cap); this.stun = new Float32Array(cap);
     this.act = new Float32Array(cap); this.seed = new Float32Array(cap);
+    this.hp = new Float32Array(cap); // police health (1 = unhurt); injured officers are evacuated
     this.W = W; this.H = H;
     this.start = new Int32Array(W * H + 1);
     this.cur = new Int32Array(W * H + 1);
@@ -44,7 +45,7 @@
     const i = this.n++;
     this.x[i] = x; this.y[i] = y; this.vx[i] = 0; this.vy[i] = 0;
     this.kind[i] = kind; this.grp[i] = grp || 0; this.slot[i] = slot || 0;
-    this.panic[i] = 0; this.stun[i] = 0; this.act[i] = 0;
+    this.panic[i] = 0; this.stun[i] = 0; this.act[i] = 0; this.hp[i] = 1;
     const r = this.rnd();
     this.seed[i] = r;
     let f = 0;
@@ -64,7 +65,7 @@
     this.slot[dst] = this.slot[src]; this.col[dst] = this.col[src];
     this.flags[dst] = this.flags[src]; this.panic[dst] = this.panic[src];
     this.stun[dst] = this.stun[src]; this.act[dst] = this.act[src];
-    this.seed[dst] = this.seed[src];
+    this.seed[dst] = this.seed[src]; this.hp[dst] = this.hp[src];
   };
 
   Crowd.prototype.compact = function () {
@@ -118,6 +119,7 @@
 
       if (k === K.POL) {
         sq = squads[grp[i]];
+        if (this.hp[i] < 1) this.hp[i] = Math.min(1, this.hp[i] + dt * P.POL_REGEN); // bruises heal: only focused fire takes officers out
         if (stun[i] > 0) { stun[i] -= dt; mi = MASS_POL_STUN; }
         else if (sq) {
           charging = sq.charge > 0;
