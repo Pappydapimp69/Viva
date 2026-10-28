@@ -25,6 +25,7 @@
   }
   PoliceAI.prototype.update = function (dt) {
     const w = this.w, map = w.map, lv = w.level;
+    if (lv.aiPassive) return; // tutorial: the police stand where they are
     this.t += dt; this.reinforceT += dt;
     this.gasCd -= dt; this.chargeCd -= dt;
 

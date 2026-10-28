@@ -31,6 +31,20 @@
       <div class="speed"><button id="btnPause" title="Pause (Esc)">❚❚</button><button id="btnSpeed" title="Speed (Tab)">1×</button></div>
     </div>
     <div id="caption"></div>
+    <div id="tutorial" class="hidden">
+      <div class="tutBody">
+        <div class="tutHead"><span class="tutStep"></span><span class="tutDev"></span></div>
+        <div class="tutTitle"></div>
+        <div class="tutText"></div>
+        <div class="tutFoot"><div class="tutDots"></div><button id="tutContinue" class="tutContinue hidden"></button></div>
+        <button id="tutSkip" class="tutSkip">skip tutorial</button>
+      </div>
+      <div class="tutEnd hidden">
+        <div class="tutTitle">Tutorial complete ✔</div>
+        <div class="tutText">You know every control. The campaign mixes both sides.</div>
+        <div class="row"><button id="tutStay">KEEP PLAYING HERE</button><button id="tutCampaign" class="big">TO THE CAMPAIGN</button></div>
+      </div>
+    </div>
     <div id="toolbar"></div>
     <div id="squadBar"></div>
     <div id="phone">
@@ -51,6 +65,7 @@
       <div class="subtitle">ONE CITY. <span class="y">100,000 PEOPLE.</span> NO GOING HOME.</div>
     </div>
     <div class="menuCol">
+      <button data-go="tutorial">TUTORIAL <span id="tutNew" class="newBadge">NEW</span></button>
       <button data-go="campaign" class="big">CAMPAIGN</button>
       <button data-go="sandbox">SANDBOX</button>
       <button data-go="howto">HOW TO PLAY</button>
@@ -59,6 +74,16 @@
       <button data-go="quit" id="btnQuit">QUIT</button>
     </div>
     <div class="foot">v<span id="ver"></span> · a crowd-simulation strategy game · all events fictional</div>
+  </div>
+
+  <div id="tutorialMenu" class="screen hidden">
+    <h2>TUTORIAL</h2>
+    <p class="sub">Two short lessons. Each step tells you exactly what to press — for mouse &amp; keyboard or a controller, whichever you pick up.</p>
+    <div class="menuCol">
+      <button data-go="tutProtest" class="big">✊ PROTEST BASICS <span id="tutDoneP"></span></button>
+      <button data-go="tutPolice">🛡 POLICE BASICS <span id="tutDoneC"></span></button>
+    </div>
+    <button data-go="main" class="back">← BACK</button>
   </div>
 
   <div id="campaignMenu" class="screen hidden">
@@ -117,6 +142,7 @@
       <h2 id="brName"></h2>
       <p id="brText"></p>
       <ul id="brObj"></ul>
+      <button id="brTut" class="hidden">TUTORIAL FIRST</button>
       <div class="row"><button data-go="campaign" class="back">← BACK</button><button id="brGo" class="big">GO</button></div>
     </div>
   </div>
@@ -162,6 +188,7 @@
 <script src="src/audio.js"></script>
 <script src="src/chat.js"></script>
 <script src="src/gamepad.js"></script>
+<script src="src/tutorial.js"></script>
 <script src="src/main.js"></script>
 </body>
 </html>

@@ -64,6 +64,24 @@
     },
   ];
 
+  // Two short practice levels: calm police / calm crowd, no way to lose.
+  P.TUTORIALS = {
+    protest: {
+      id: 'tut-protest', tutorial: 'protest', name: 'Tutorial — Protest', side: S.PROTEST, seed: 5, w: 224, h: 224, style: 'haussmann',
+      pop: 5000, squads: 2, squadSize: 32, trucks: 1, time: 3600, cassFrac: 0.002, blocs: 1, landmarks: 3, captureMul: 3,
+      aiPassive: true, names: ['République', 'Bastille', 'Nation'], startFrac: 0.7, momentum: 60,
+      caption: ['TUTORIAL', 'PROTEST'], brief: 'Learn to lead the crowd, one step at a time.',
+      objectives: [{ type: 'survive', label: 'Follow the steps' }], chat: ['rdv 14h répu 🔥'],
+    },
+    police: {
+      id: 'tut-police', tutorial: 'police', name: 'Tutorial — Police', side: S.POLICE, seed: 9, w: 224, h: 224, style: 'haussmann',
+      pop: 6000, squads: 3, squadSize: 36, trucks: 2, time: 3600, cassFrac: 0.004, blocs: 1, landmarks: 3, authority: 80,
+      aiFireworks: 99999, aiBarricade: 99999, aiConvert: 99999, aiStall: 99999, names: ['Bastille', 'République', 'Nation'], startFrac: 0.6,
+      caption: ['TUTORIAL', 'POLICE'], brief: 'Learn to command the CRS, one step at a time.',
+      objectives: [{ type: 'survive', label: 'Follow the steps' }], chat: ['PC: exercice, exercice, exercice'],
+    },
+  };
+
   P.sandboxLevel = function (o) {
     const police = o.side === S.POLICE;
     return {

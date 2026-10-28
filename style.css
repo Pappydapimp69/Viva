@@ -147,3 +147,30 @@ body.pad #tip { bottom: 124px; }
 #padLabel { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 20; font-family: var(--font); font-size: 11px; letter-spacing: .5px;
   background: rgba(0,0,0,.65); color: #fff; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
 #padCursor.snap { border-color: var(--y); width: 34px; height: 34px; margin: -17px 0 0 -17px; transition: width .1s, height .1s, margin .1s; }
+
+/* ---------------- tutorial ---------------- */
+#tutorial { position: absolute; left: 50%; top: 104px; transform: translateX(-50%); width: min(520px, 92vw); z-index: 15;
+  background: rgba(14,15,18,.94); border: 2px solid var(--y); border-radius: 14px; padding: 12px 16px 10px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.tutHead { display: flex; justify-content: space-between; font-family: var(--font); font-size: 11px; letter-spacing: 1px; color: var(--y); }
+.tutDev { color: var(--mut); font-family: var(--body); letter-spacing: 0; }
+.tutTitle { font-family: var(--font); font-size: 20px; margin: 4px 0 6px; }
+.tutText { font-size: 14px; line-height: 1.5; color: #e6e6e6; }
+.tutFoot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; }
+.tutDots { display: flex; gap: 4px; flex-wrap: wrap; }
+.tutDots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.18); display: block; }
+.tutDots i.d { background: #7dff9a; } .tutDots i.c { background: var(--y); }
+.tutContinue { background: var(--y); color: #111; border: 2px solid #111; border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+.tutSkip { position: absolute; right: 12px; bottom: -22px; background: none; border: 0; color: var(--mut); font-family: var(--body); font-size: 11px; text-decoration: underline; }
+.tutEnd .row { margin-top: 10px; }
+.tutEnd button { background: rgba(20,21,25,.9); color: #fff; border: 2px solid var(--line); border-radius: 10px; padding: 9px 14px; font-size: 13px; }
+.tutEnd button.big { background: var(--y); color: #111; border-color: #111; }
+kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 1px; border-radius: 5px; background: #2a2c31; border: 1px solid #555; border-bottom-width: 3px;
+  font-family: var(--font); font-size: 11px; color: #fff; text-align: center; }
+.padbtn { display: inline-block; min-width: 22px; padding: 1px 6px; border-radius: 11px; font-family: var(--font); font-size: 11px; color: #111; text-align: center; background: #ccc; }
+.pb-a { background: #5fd35f; } .pb-b { background: #ff6b5b; } .pb-x { background: #5aa0ff; } .pb-y { background: #ffd21f; }
+.pb-lb, .pb-rb, .pb-lt, .pb-rt, .pb-back { background: #d9d9d9; border-radius: 5px; }
+.tutHi { outline: 3px solid var(--y) !important; outline-offset: 3px; animation: tutPulse 1s ease-in-out infinite; }
+@keyframes tutPulse { 50% { outline-color: rgba(255,210,31,.25); } }
+.newBadge { background: var(--red); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
+.sub { color: #ccc; max-width: 520px; text-align: center; margin: 0; }
+#brTut { background: rgba(255,210,31,.12); color: var(--y); border: 2px dashed var(--y); border-radius: 10px; padding: 9px 14px; font-size: 13px; }

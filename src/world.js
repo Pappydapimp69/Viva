@@ -550,7 +550,7 @@
         }
       lm.prot = prot; lm.pol = pol;
       const prev = lm.owner;
-      if (prot > 25 && prot > pol * 4) lm.control += dt * 0.006 * Math.min(3, prot / (pol * 4 + 25));
+      if (prot > 25 && prot > pol * 4) lm.control += dt * 0.006 * (this.level.captureMul || 1) * Math.min(3, prot / (pol * 4 + 25));
       else if (pol > 4 && pol * 4 >= prot) lm.control -= dt * 0.02 * Math.min(3, (pol * 4 + 1) / (prot + 10));
       else lm.control += (lm.owner === 'protest' ? 0.004 : -0.004) * dt;
       lm.control = P.clamp(lm.control, -1, 1);

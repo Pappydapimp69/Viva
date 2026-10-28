@@ -12,7 +12,8 @@
     set(k, v) { try { localStorage.setItem('pave.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
   };
   const settings = Object.assign({ vol: 0.7, crowd: 1, edge: false, fps: false, full: false }, store.get('settings', {}));
-  const progress = Object.assign({ unlocked: 1, stars: {}, ach: {} }, store.get('progress', {}));
+  const progress = Object.assign({ unlocked: 1, stars: {}, ach: {}, tut: {} }, store.get('progress', {}));
+  progress.tut = progress.tut || {};
   const saveSettings = () => store.set('settings', settings);
   const saveProgress = () => store.set('progress', progress);
 
@@ -42,7 +43,7 @@
   let world = null, level = null, levelIdx = -1, chat = null;
   const cam = { x: 160, y: 160, zoom: 3, tz: 3 };
   let paused = true, speed = 1, acc = 0, last = performance.now();
-  let tool = null, selBloc = 0, selSquad = -1;
+  let tool = null, selBloc = 0, selSquad = -1, tut = null;
   let mouse = { x: 0, y: 0, wx: 0, wy: 0, down: false, mid: false, drag: null, lastX: 0, lastY: 0 };
   const keys = {};
   let captionT = 0, shownCaptions = {};
@@ -58,13 +59,14 @@
   resize();
 
   // ------------------------------------------------------------ screens
-  const screens = ['mainMenu', 'campaignMenu', 'sandboxMenu', 'settingsMenu', 'howtoMenu', 'creditsMenu', 'briefing', 'pauseMenu', 'endScreen', 'loading'];
+  const screens = ['mainMenu', 'tutorialMenu', 'campaignMenu', 'sandboxMenu', 'settingsMenu', 'howtoMenu', 'creditsMenu', 'briefing', 'pauseMenu', 'endScreen', 'loading'];
   let current = 'mainMenu';
   function show(id) {
     if (id !== current && ['settingsMenu', 'howtoMenu'].includes(id)) prevScreen = current;
     for (const s of screens) $(s).classList.toggle('hidden', s !== id);
     current = id;
     if (id === 'campaignMenu') buildLevelGrid();
+    if (id === 'mainMenu' || id === 'tutorialMenu') refreshTutorialBadges();
     if (id === 'settingsMenu') loadSettingsUI();
   }
   function hideScreens() { for (const s of screens) $(s).classList.add('hidden'); current = null; }
@@ -76,6 +78,9 @@
     const go = b.dataset.go;
     if (go === 'main') { show('mainMenu'); }
     else if (go === 'campaign') show('campaignMenu');
+    else if (go === 'tutorial') show('tutorialMenu');
+    else if (go === 'tutProtest') startTutorial('protest');
+    else if (go === 'tutPolice') startTutorial('police');
     else if (go === 'sandbox') show('sandboxMenu');
     else if (go === 'settings') show('settingsMenu');
     else if (go === 'howto') show('howtoMenu');
@@ -108,6 +113,9 @@
     $('brName').textContent = lv.name;
     $('brText').textContent = lv.brief;
     $('brObj').innerHTML = lv.objectives.map((o) => '<li>▸ ' + o.label + '</li>').join('') + `<li style="color:#aaa">⏱ ${P.fmtTime(lv.time)}</li>`;
+    $('brTut').classList.toggle('hidden', !!progress.tut[lv.side]);
+    $('brTut').dataset.go = lv.side === S.PROTEST ? 'tutProtest' : 'tutPolice';
+    $('brTut').textContent = 'NEW HERE? ' + (lv.side === S.PROTEST ? 'PROTEST' : 'POLICE') + ' TUTORIAL FIRST';
     show('briefing');
   }
   $('brGo').onclick = () => { audio.init(); start(P.LEVELS[levelIdx]); };
@@ -162,10 +170,42 @@
       hideScreens();
       $('hud').classList.remove('hidden');
       caption(lv.caption[0], lv.caption[1], 3.5);
+      if (tut) { tut.destroy(); tut = null; }
+      $('tutorial').classList.add('hidden');
+      if (lv.tutorial) {
+        $('tutorial').classList.remove('hidden');
+        $('tutorial').querySelector('.tutBody').classList.remove('hidden');
+        $('tutorial').querySelector('.tutEnd').classList.add('hidden');
+        tut = new P.Tutorial(lv.side, tutApi);
+      }
       paused = false; acc = 0;
       R.miniT = 0;
     }, 30);
   }
+
+  // ------------------------------------------------------------ tutorial
+  const tutApi = {
+    get world() { return world; }, get lastInput() { return lastInput; }, get tool() { return tool; },
+    get selSquad() { return selSquad; }, setSelSquad(i) { selSquad = i; }, pickTool: (id) => pickTool(id), cam,
+    el: $('tutorial'),
+    onDone(side) {
+      progress.tut[side] = true; saveProgress();
+      $('tutorial').querySelector('.tutBody').classList.add('hidden');
+      $('tutorial').querySelector('.tutEnd').classList.remove('hidden');
+      document.querySelectorAll('.tutHi').forEach((el) => el.classList.remove('tutHi'));
+      audio.play('win');
+    },
+  };
+  function startTutorial(side) { audio.init(); levelIdx = -2; start(P.TUTORIALS[side], true); }
+  function refreshTutorialBadges() {
+    $('tutNew').classList.toggle('hidden', !!(progress.tut.protest && progress.tut.police));
+    $('tutDoneP').textContent = progress.tut.protest ? '✔' : '';
+    $('tutDoneC').textContent = progress.tut.police ? '✔' : '';
+  }
+  $('tutSkip').onclick = (e) => { e.stopPropagation(); if (tut) { tut.destroy(); tut = null; } $('tutorial').classList.add('hidden'); };
+  $('tutContinue').onclick = (e) => { e.stopPropagation(); if (tut) tut.confirm(); };
+  $('tutCampaign').onclick = (e) => { e.stopPropagation(); if (tut) { tut.destroy(); tut = null; } quitToMenu(); show('campaignMenu'); };
+  $('tutStay').onclick = (e) => { e.stopPropagation(); $('tutorial').classList.add('hidden'); };
 
   function caption(a, b, t) {
     const c = $('caption');
@@ -417,6 +457,7 @@
     if (e.code === 'Escape') { togglePause(); return; }
     if (e.code === 'Tab') { e.preventDefault(); cycleSpeed(); return; }
     if (paused) return;
+    if ((e.code === 'Enter' || e.code === 'Space') && tut && tut.confirm()) { e.preventDefault(); return; }
     const k = e.key.toUpperCase();
     if (world.side === S.PROTEST) {
       const t = PROT_TOOLS.find((x) => x.key === k); if (t) pickTool(t.id);
@@ -560,6 +601,7 @@
     if (pad.pressed(PB.START)) { togglePause(); return; }
     if (pad.pressed(PB.BACK)) cycleSpeed();
     if (paused) return;
+    if (pad.pressed(PB.A) && tut && tut.confirm()) return;
     padCur.x = canvas.width / 2; padCur.y = canvas.height / 2; padCur.init = true;
     mouse.x = padCur.x; mouse.y = padCur.y;
     const c = toWorld(padCur.x, padCur.y);
@@ -653,11 +695,19 @@
   $('psResume').onclick = () => togglePause();
   $('psRestart').onclick = () => { paused = true; start(level, levelIdx < 0); };
   $('psQuit').onclick = () => quitToMenu();
-  function quitToMenu() { world = null; paused = true; $('hud').classList.add('hidden'); show('mainMenu'); }
+  function quitToMenu() { if (tut) { tut.destroy(); tut = null; } $('tutorial').classList.add('hidden'); world = null; paused = true; $('hud').classList.add('hidden'); show('mainMenu'); }
 
   // ------------------------------------------------------------ overlay (world space)
   const overlay = (g, z) => {
     if (!world) return;
+    const tt = tut && tut.target();
+    if (tt) {
+      const pulse = 1 + Math.sin(performance.now() / 180) * 0.12;
+      g.strokeStyle = 'rgba(255,210,31,0.95)'; g.lineWidth = 3 / z;
+      g.beginPath(); g.arc(tt.x, tt.y, tt.r * pulse, 0, 6.283); g.stroke();
+      g.strokeStyle = 'rgba(255,210,31,0.35)'; g.lineWidth = 8 / z;
+      g.beginPath(); g.arc(tt.x, tt.y, tt.r * pulse + 6 / z, 0, 6.283); g.stroke();
+    }
     const lw = 1.6 / z;
     if (world.side === S.PROTEST) {
       world.blocs.forEach((b, i) => {
@@ -694,11 +744,29 @@
     }
   };
 
+  // off-screen tutorial targets get an arrow on the screen edge pointing at them
+  function drawTutArrow(g) {
+    const tt = tut && tut.target();
+    if (!tt) return;
+    const sx = (tt.x - cam.x) * cam.zoom + canvas.width / 2, sy = (tt.y - cam.y) * cam.zoom + canvas.height / 2;
+    const m = 70;
+    if (sx > m && sy > m && sx < canvas.width - m && sy < canvas.height - m) return;
+    const cx = canvas.width / 2, cy = canvas.height / 2, a = Math.atan2(sy - cy, sx - cx);
+    const k = Math.min((canvas.width / 2 - m) / Math.abs(Math.cos(a) || 1e-6), (canvas.height / 2 - m) / Math.abs(Math.sin(a) || 1e-6));
+    const ax = cx + Math.cos(a) * k, ay = cy + Math.sin(a) * k;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.save(); g.translate(ax, ay); g.rotate(a);
+    g.fillStyle = '#ffd21f'; g.strokeStyle = '#111'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(26, 0); g.lineTo(-12, -18); g.lineTo(-4, 0); g.lineTo(-12, 18); g.closePath(); g.stroke(); g.fill();
+    g.restore();
+  }
+
   // ------------------------------------------------------------ per-frame
   function handleEvents() {
     const evs = world.events;
     if (!evs.length) return;
     for (const e of evs) {
+      if (tut) tut.onEvent(e);
       R.fxEvent(e);
       chat.event(e, world.time);
       switch (e.type) {
@@ -851,6 +919,7 @@
       handleEvents();
     }
     R.draw(cam, paused ? 0 : dt, { overlay });
+    if (tut && !paused) { tut.update(dt); drawTutArrow(R.g); }
     if (captionT > 0) { captionT -= dt; if (captionT <= 0) $('caption').classList.remove('show'); }
     if (tipT > 0) { tipT -= dt; if (tipT <= 0) $('tip').classList.remove('show'); }
     R.miniT = (R.miniT || 0) - dt;
@@ -886,5 +955,5 @@
   requestAnimationFrame(frame);
 
   // test hook (used by the smoke test; harmless in game)
-  P.debug = { get world() { return world; }, get padSnap() { return padSnap; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
+  P.debug = { get world() { return world; }, get tut() { return tut; }, startTutorial, get padSnap() { return padSnap; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
 })();
