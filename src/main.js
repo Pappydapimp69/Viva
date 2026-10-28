@@ -608,6 +608,7 @@
       }
     } else {
       if (tool === 'march') for (const lm of world.map.landmarks) consider(lm.x, lm.y, 'landmark', lm);
+      if (tool === 'march' || tool === 'casseurs') for (const tr of world.trucks) if (tr.state !== 'abandoned') consider(tr.x, tr.y, 'truck', tr);
       if (tool === 'fireworks') world.squads.forEach((sq, i) => consider(sq.mx != null ? sq.mx : sq.ax, sq.my != null ? sq.my : sq.ay, 'squad', i));
       if (tool === 'casseurs') world.blocs.forEach((b) => { if (b.n > 50) consider(b.cx, b.cy, 'bloc', b); });
     }
@@ -671,7 +672,7 @@
     // reticle label: what A will do right now
     const t = tools().find((x) => x.id === tool);
     let label = t ? t.name : '';
-    if (padSnap) label += ' · ' + (padSnap.kind === 'squad' ? world.squads[padSnap.ref].name : padSnap.kind === 'landmark' ? padSnap.ref.name : padSnap.kind === 'fire' ? 'FIRE' : padSnap.kind === 'bloc' ? 'BLOC' : 'CASSEURS');
+    if (padSnap) label += ' · ' + (padSnap.kind === 'squad' ? world.squads[padSnap.ref].name : padSnap.kind === 'landmark' ? padSnap.ref.name : padSnap.kind === 'fire' ? 'FIRE' : padSnap.kind === 'bloc' ? 'BLOC' : padSnap.kind === 'truck' ? 'FIRE TRUCK' : 'CASSEURS');
     else if (mouse.drag) label += ' · release A to build';
     $('padLabel').textContent = label;
     $('padCursor').classList.toggle('snap', !!padSnap);
@@ -803,6 +804,14 @@
         case 'burst': if (e.hit > 20) captionOnce('fw', 'MORTARS', 'LAUNCHED'); break;
         case 'charge': if (world.side === S.PROTEST && camDist(e.x, e.y) < 80) captionOnce('charge', 'THE', 'CHARGE'); break;
         case 'extinguished': if (world.stats.extinguished >= 25) unlock('POMPIER'); break;
+        case 'truckSurrounded':
+          if (world.side === S.POLICE) { captionOnce('pin', 'TRUCK', 'SURROUNDED'); tip('A fire truck is pinned — charge or gas the crowd around it'); }
+          else captionOnce('pin', 'TRUCK', 'PINNED');
+          break;
+        case 'truckAbandoned':
+          caption('TRUCK', 'ABANDONED', 2.2); audio.play(world.side === S.PROTEST ? 'capture' : 'lost');
+          if (lastInput === 'pad') pad.rumble(250, 0.6, 0.3);
+          break;
         case 'win': case 'lose': end(); break;
       }
     }
@@ -850,7 +859,7 @@
     $('resVal').textContent = Math.floor(r);
     // why the bar moves: net rate and the biggest sources, per minute
     if (world.side === S.PROTEST) {
-      const NAMES = { crowd: 'crowd', squares: 'squares', fires: 'fires', fireworks: 'mortars', gas: 'tear gas', arrests: 'arrests', spent: 'spent' };
+      const NAMES = { crowd: 'crowd', squares: 'squares', fires: 'fires', fireworks: 'mortars', gas: 'tear gas', arrests: 'arrests', spent: 'spent', trucks: 'trucks' };
       const rs = Object.entries(w.momRate).filter(([, v]) => Math.abs(v) >= 0.5);
       const net = rs.filter(([k]) => k !== 'spent').reduce((a, [, v]) => a + v, 0);
       rs.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));

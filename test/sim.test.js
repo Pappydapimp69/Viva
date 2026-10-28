@@ -136,3 +136,43 @@ test('gamepad: button edges and menu repeat', () => {
   state.axes = [0.9, 0.1, 0, 0]; pad.poll(1 / 60);
   assert.strictEqual(pad.nav, 'right');
 });
+
+test('a crowd packed round a fire truck makes the crew abandon it; clearing it brings them back', () => {
+  const w = new P.World(P.LEVELS[3], {});
+  const c = w.map.cars.find((c) => c.near.length === 0) || w.map.cars[0];
+  w.ignite(c.id, 'test');
+  assert.ok(w.dispatchTruck(c));
+  const tr = w.trucks[0];
+  // send the bloc at the truck and pack 30 of its people right round it
+  w.blocs[0].tx = tr.x; w.blocs[0].ty = tr.y;
+  const ids = [];
+  for (let k = 0; k < 30; k++) { const o = w.map.nearestOpen(tr.x + (k % 6) - 2.5, tr.y + ((k / 6) | 0) - 2.5, 4); ids.push(w.crowd.add(P.K.PROT, o.x, o.y, 0)); }
+  let abandoned = false;
+  for (let i = 0; i < 30 * 10 && !abandoned; i++) {
+    w.crowd.sx.set(w.crowd.x.subarray(0, w.crowd.n)); w.crowd.sy.set(w.crowd.y.subarray(0, w.crowd.n)); w.crowd.buildGrid();
+    w.updateTrucks(P.SIM_DT);
+    abandoned = tr.state === 'abandoned';
+  }
+  assert.ok(abandoned, 'crew abandoned the truck (press ' + tr.press + ')');
+  const inten = c.inten;
+  w.updateFires(1); assert.ok(c.spray <= 0 || c.state !== 1 || c.inten >= inten - 1e-6, 'an abandoned truck does not spray');
+  // crowd goes home
+  for (const j of ids) w.crowd.kind[j] = P.K.DEAD;
+  w.crowd.compact();
+  for (let i = 0; i < 30 * 10 && tr.state === 'abandoned'; i++) {
+    w.crowd.sx.set(w.crowd.x.subarray(0, w.crowd.n)); w.crowd.sy.set(w.crowd.y.subarray(0, w.crowd.n)); w.crowd.buildGrid();
+    w.updateTrucks(P.SIM_DT);
+  }
+  assert.strictEqual(tr.state, 'back', 'crew came back and drove home');
+});
+
+test('an ordinary crowd lets a fire truck through', () => {
+  const w = new P.World(P.LEVELS[3], {});
+  const c = w.map.cars.find((c) => c.near.length === 0) || w.map.cars[0];
+  w.ignite(c.id, 'test'); w.dispatchTruck(c);
+  const tr = w.trucks[0];
+  w.blocs.forEach((b) => { b.tx = -999; b.ty = -999; });
+  for (let k = 0; k < 40; k++) { const o = w.map.nearestOpen(tr.x + (k % 7) - 3, tr.y + ((k / 7) | 0) - 3, 4); w.crowd.add(P.K.PROT, o.x, o.y, 0); }
+  w.crowd.sx.set(w.crowd.x.subarray(0, w.crowd.n)); w.crowd.sy.set(w.crowd.y.subarray(0, w.crowd.n)); w.crowd.buildGrid();
+  assert.strictEqual(w.crowdPressAt(tr.x, tr.y, 3.5), 0);
+});

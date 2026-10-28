@@ -434,13 +434,23 @@
     for (const tr of w.trucks) {
       g.save(); g.translate(tr.x, tr.y); g.rotate(tr.a);
       g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(-3.2 + 0.4, -1.3 + 0.5, 6.4, 2.6);
-      g.fillStyle = '#c4161c'; g.fillRect(-3.2, -1.3, 6.4, 2.6);
+      const ab = tr.state === 'abandoned';
+      g.fillStyle = ab ? '#7d3a3c' : '#c4161c'; g.fillRect(-3.2, -1.3, 6.4, 2.6);
       g.fillStyle = '#e8e8e8'; g.fillRect(-1.6, -0.35, 4.4, 0.7);
       g.fillStyle = '#7a0c10'; g.fillRect(2.1, -1.3, 1.1, 2.6);
-      const blink = (this.time * 4 | 0) % 2;
+      const blink = ab ? 2 : (this.time * 4 | 0) % 2;
       g.fillStyle = blink ? '#4fa3ff' : '#1a3c70'; g.fillRect(2.2, -1.2, 0.5, 0.5);
       g.fillStyle = blink ? '#1a3c70' : '#4fa3ff'; g.fillRect(2.2, 0.7, 0.5, 0.5);
       g.restore();
+      // pinned by the crowd: an orange ring fills up; abandoned: a grey ring that empties as the crowd thins
+      if (tr.sur > 0.05 || ab) {
+        const f = ab ? 1 - Math.min(1, (tr.clear || 0) / P.TRUCK_RECOVER_S) : Math.min(1, tr.sur / P.TRUCK_ABANDON_S);
+        g.lineWidth = Math.max(0.4, 3 / z);
+        g.strokeStyle = 'rgba(0,0,0,0.5)';
+        g.beginPath(); g.arc(tr.x, tr.y, 5, 0, 6.283); g.stroke();
+        g.strokeStyle = ab ? 'rgba(200,200,200,0.9)' : 'rgba(255,150,40,0.95)';
+        g.beginPath(); g.arc(tr.x, tr.y, 5, -Math.PI / 2, -Math.PI / 2 + f * 6.283); g.stroke();
+      }
       if (tr.spray && tr.sprayAt) {
         for (let i = 0; i < 3; i++) {
           const tx = tr.sprayAt.cx + (Math.random() - 0.5) * 2, ty = tr.sprayAt.cy + (Math.random() - 0.5) * 2;

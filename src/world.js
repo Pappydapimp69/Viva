@@ -501,6 +501,31 @@
     for (const tr of this.trucks) {
       const tx = tr.x | 0, ty = tr.y | 0, t = ty * map.W + tx;
       const f = tr.field;
+      // --- surrounded by the crowd: the crew abandons the truck, comes back once it's clear
+      const press = this.crowdPressAt(tr.x, tr.y, 3.5);
+      tr.press = press;
+      const need = P.TRUCK_SURROUND;
+      if (tr.state !== 'abandoned') {
+        if (press >= need) {
+          if (!tr.sur) this.emit('truckSurrounded', { x: tr.x, y: tr.y });
+          tr.sur = (tr.sur || 0) + dt;
+          if (tr.sur >= P.TRUCK_ABANDON_S) {
+            tr.state = 'abandoned'; tr.spray = 0; tr.clear = 0;
+            this.addMom('trucks', 4);
+            this.emit('truckAbandoned', { x: tr.x, y: tr.y });
+            continue;
+          }
+        } else tr.sur = Math.max(0, (tr.sur || 0) - dt * 0.5);
+      } else {
+        tr.spray = 0;
+        if (press < 4) tr.clear = (tr.clear || 0) + dt; else tr.clear = 0;
+        if (tr.clear >= P.TRUCK_RECOVER_S) {
+          tr.sur = 0; tr.clear = 0; tr.state = 'back'; tr.rescue = false;
+          tr.field.compute(P.discSources(map, map.station.x, map.station.y, 2));
+          this.emit('truckRecovered', { x: tr.x, y: tr.y });
+        }
+        continue;
+      }
       if (tr.state === 'go' || tr.state === 'back') {
         const d = f.dist[t];
         // arrive by distance to the fire itself (the road can stop short of a car parked on a lane)
@@ -513,7 +538,8 @@
           continue;
         }
         const ci = (ty >> 2) * CW + (tx >> 2);
-        const crowded = this.densP[ci] > 14 ? 0.35 : 1;
+        // people in the way slow the truck; a full ring of them stops it dead
+        const crowded = (this.densP[ci] > 14 ? 0.35 : 1) * Math.max(0, 1 - press / need);
         const sp = 12 * crowded;
         const dx = f.dx[t], dy = f.dy[t];
         tr.x += dx * sp * dt; tr.y += dy * sp * dt;
@@ -541,6 +567,27 @@
     const before = this.trucks.length;
     this.trucks = this.trucks.filter((t) => !t.done);
     this.trucksOut -= before - this.trucks.length;
+  };
+
+  // How hard a HOSTILE crowd presses on a point (a fire truck): casseurs count double;
+  // ordinary protesters count only if their bloc was sent at this spot. Everyone else
+  // makes way for the pompiers.
+  World.prototype.crowdPressAt = function (x, y, r) {
+    const cr = this.crowd, W = this.map.W, H = this.map.H, start = cr.start, items = cr.items;
+    const aimed = this.blocs.map((b) => (b.tx - x) ** 2 + (b.ty - y) ** 2 < 100);
+    let n = 0;
+    const r2 = r * r;
+    for (let yy = Math.max(0, Math.floor(y - r)); yy <= Math.min(H - 1, Math.floor(y + r)); yy++)
+      for (let xx = Math.max(0, Math.floor(x - r)); xx <= Math.min(W - 1, Math.floor(x + r)); xx++) {
+        const c = yy * W + xx;
+        for (let a = start[c], e = start[c + 1]; a < e; a++) {
+          const j = items[a], k = cr.kind[j];
+          if (k === K.POL || k === K.DEAD) continue;
+          if (k === K.PROT && !aimed[cr.grp[j]]) continue;
+          if ((cr.x[j] - x) ** 2 + (cr.y[j] - y) ** 2 <= r2) n += k === K.CASS ? 2 : 1;
+        }
+      }
+    return n;
   };
 
   World.prototype.updateProjectiles = function (dt) {
@@ -713,5 +760,8 @@
     this.checkObjectives();
   };
 
+  P.TRUCK_SURROUND = 16;   // crowd press (casseurs x2) that pins a truck
+  P.TRUCK_ABANDON_S = 5;   // seconds pinned before the crew walks away
+  P.TRUCK_RECOVER_S = 8;   // seconds clear before the crew returns
   P.World = World;
 })();

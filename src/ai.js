@@ -40,6 +40,13 @@
     if (this.t < 2.5) return;
     this.t = 0;
     const lms = map.landmarks;
+    // a truck pinned by the crowd: the nearest free squad goes to clear it
+    for (const tr of w.trucks) {
+      if (!(tr.sur > 1 || tr.state === 'abandoned') || tr.rescue) continue;
+      let best = null, bd = Infinity;
+      for (const sq of w.squads) { if (sq.charge > 0) continue; const d = Math.hypot(sq.ax - tr.x, sq.ay - tr.y); if (d < bd) { bd = d; best = sq; } }
+      if (best && w.aiAuthority >= 5) { w.orderSquad(best, tr.x, tr.y, true); w.aiAuthority -= 5; tr.rescue = true; }
+    }
     const perLm = {};
     for (const sq of w.squads) {
       if (sq.charge > 0) continue;

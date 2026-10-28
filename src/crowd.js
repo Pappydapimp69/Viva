@@ -161,6 +161,8 @@
             const m = Math.sqrt(gx * gx + gy * gy);
             if (m > 0.01) { dxd = gx / m; dyd = gy / m; }
             speed = 2.2;
+          } else if (seed[i] > 0.4 && (() => { for (let q = 0; q < trucks.length; q++) { const tr = trucks[q]; if (tr.state !== 'abandoned' && (tr.x - xi) ** 2 + (tr.y - yi) ** 2 < 400) { const d = Math.hypot(tr.x - xi, tr.y - yi) || 1; dxd = (tr.x - xi) / d; dyd = (tr.y - yi) / d; speed = 2.6; return true; } } return false; })()) {
+            // a fire truck nearby: casseurs crowd round it
           } else if (act[i] >= 0 && carField.ready && carField.dist[t] !== P.INF && w.intactCars > 0) {
             dxd = carField.dx[t]; dyd = carField.dy[t]; speed = 2.7;
             if (carField.dist[t] <= 14) {

@@ -18,6 +18,9 @@
     burst: ['les mortiers ont touché 🎆', 'feu d\'artifice sur les boucliers 🎆'],
     casseurs: ['le bloc noir est là 🖤', 'cagoules sorties {street}'],
     mobilise: ['tout le monde dehors 📣', 'rdv {street} venez'],
+    truckSurrounded: ['on encercle le camion {street} 🚒', 'bloquez les pompiers {street}'],
+    truckAbandoned: ['les pompiers ont lâché le camion 😮', 'camion bloqué {street}, il bouge plus'],
+    truckRecovered: ['ils ont récupéré le camion {street}'],
   };
   const POL = {
     ignite: ['Feu de véhicule, {street}.', 'Départ de feu signalé {street}.'],
@@ -30,6 +33,9 @@
     casseurs: ['Black bloc constitué {street}.'],
     extinguished: ['Feu maîtrisé {street}.'],
     truck: ['Pompiers engagés {street}.'],
+    truckSurrounded: ['VSAV encerclé {street}, dégagez-le !'],
+    truckAbandoned: ['Équipage évacué, véhicule abandonné {street}.'],
+    truckRecovered: ['Véhicule récupéré {street}.'],
   };
 
   function Chat(el, side, map) {
@@ -55,7 +61,7 @@
     const table = this.side === P.SIDE.PROTEST ? PROT : POL;
     const set = table[e.type];
     if (!set) return;
-    const gap = e.type === 'capture' || e.type === 'retake' ? 0 : 7;
+    const gap = e.type === 'capture' || e.type === 'retake' || e.type === 'truckAbandoned' ? 0 : 7;
     if (this.last[e.type] != null && time - this.last[e.type] < gap) return;
     this.last[e.type] = time;
     const who = this.side === P.SIDE.PROTEST ? NAMES[(Math.random() * NAMES.length) | 0] : 'PC Préfecture';
