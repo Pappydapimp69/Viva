@@ -114,8 +114,8 @@
     },
     {
       title: 'Momentum is everything', info: true,
-      mk: 'Burning cars and holding squares raise momentum; tear gas and arrests drain it. If it hits zero and the crowd melts away, you lose. Your other blocs: switch with ' + kb('Q') + '.',
-      pad: 'Burning cars and holding squares raise momentum; tear gas and arrests drain it. If it hits zero and the crowd melts away, you lose. Your other blocs: switch with ' + btn('Y') + '.',
+      mk: 'The line under the bar shows where momentum comes from, per minute. Holding squares and burning cars earn the most; tear gas and arrests drain it. If it hits zero and the crowd melts away, you lose. Your other blocs: switch with ' + kb('Q') + '.',
+      pad: 'The line under the bar shows where momentum comes from, per minute. Holding squares and burning cars earn the most; tear gas and arrests drain it. If it hits zero and the crowd melts away, you lose. Your other blocs: switch with ' + btn('Y') + '.',
       hi: '.resRow',
     },
   ];

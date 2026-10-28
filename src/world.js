@@ -29,6 +29,8 @@
     this.events = [];       // consumed by UI / audio / chat each frame
     this.stats = { burned: 0, arrests: 0, left: 0, peak: 0, captures: 0, gasUsed: 0, fireworks: 0, extinguished: 0 };
     this.momentum = level.momentum != null ? level.momentum : 50;
+    // where momentum comes from, per source, as a smoothed per-minute rate (shown under the bar)
+    this.momBucket = {}; this.momRate = {}; this.momT = 0;
     this.authority = level.authority != null ? level.authority : 60;
     this.aiAuthority = 70;
     this.trucks = []; this.trucksMax = level.trucks != null ? level.trucks : 3; this.trucksOut = 0;
@@ -107,6 +109,22 @@
     this.objectives = (level.objectives || []).map((o) => Object.assign({ done: false, failed: false, progress: '' }, o));
     this.landmarkTick = 0; this.spawnTick = 0; this.secTick = 0;
   }
+
+  World.prototype.addMom = function (src, amt) {
+    const before = this.momentum;
+    this.momentum = P.clamp(this.momentum + amt, 0, 100);
+    this.momBucket[src] = (this.momBucket[src] || 0) + (this.momentum - before);
+  };
+  World.prototype.updateMomRates = function (dt) {
+    this.momT += dt;
+    if (this.momT < 1) return;
+    const keys = new Set(Object.keys(this.momBucket).concat(Object.keys(this.momRate)));
+    for (const k of keys) {
+      const perMin = (this.momBucket[k] || 0) / this.momT * 60;
+      this.momRate[k] = (this.momRate[k] || 0) * 0.85 + perMin * 0.15;
+    }
+    this.momBucket = {}; this.momT = 0;
+  };
 
   World.prototype.emit = function (type, data) {
     const e = Object.assign({ type, t: this.time }, data || {});
@@ -278,7 +296,7 @@
   // ---------------- events from the crowd -----------------
   World.prototype.onArrest = function (j) {
     this.stats.arrests++;
-    this.momentum = Math.max(0, this.momentum - 0.35);
+    this.addMom('arrests', -0.35);
     if (this.stats.arrests % 10 === 1) this.emit('arrest', { x: this.crowd.x[j], y: this.crowd.y[j] });
   };
   World.prototype.onLeave = function () { this.stats.left++; };
@@ -289,7 +307,7 @@
     c.state = 1; c.burn = 0; c.inten = 0.15; c.heat = 1;
     this.stats.burned++;
     this.intactCars--;
-    this.momentum = Math.min(100, this.momentum + 0.6);
+    this.addMom('fires', 0.6);
     if (this.carDirtyAt < 0) this.carDirtyAt = this.time;
     this.emit('ignite', { x: c.cx, y: c.cy, car: id, by });
   };
@@ -542,7 +560,7 @@
           const dx = cr.x[i] - s.x, dy = cr.y[i] - s.y;
           if (dx * dx + dy * dy < 42) { cr.stun[i] = 2.5 + this.rng() * 2; hit++; }
         }
-        if (hit) this.momentum = Math.min(100, this.momentum + 1.5);
+        if (hit) this.addMom('fireworks', 1.5);
         this.emit('burst', { x: s.x, y: s.y, hit });
       }
     }
@@ -569,8 +587,8 @@
       if (lm.owner === 'police' && lm.control >= 1) lm.owner = 'protest';
       else if (lm.owner === 'protest' && lm.control <= 0) lm.owner = 'police';
       if (lm.owner !== prev) {
-        if (lm.owner === 'protest') { this.stats.captures++; this.momentum = Math.min(100, this.momentum + 12); }
-        else this.momentum = Math.max(0, this.momentum - 6);
+        if (lm.owner === 'protest') { this.stats.captures++; this.addMom('squares', 12); }
+        else this.addMom('squares', -6);
         this.emit(lm.owner === 'protest' ? 'capture' : 'retake', { x: lm.x, y: lm.y, name: lm.name, id: lm.id });
       }
       if (lm.owner === 'protest') lm.heldFor += dt; else lm.heldFor = 0;
@@ -587,8 +605,12 @@
       avgPanic = c ? s / c : 0;
     }
     this.avgPanic = avgPanic;
-    this.momentum += dt * (0.35 * held + 0.12 - 1.6 * avgPanic - (this.protCount < this.pop * 0.15 ? 0.4 : 0));
-    this.momentum = P.clamp(this.momentum, 0, 100);
+    // steady income: the crowd itself, and every square you hold; panic (tear gas) eats into it
+    this.addMom('crowd', dt * 0.25);
+    if (held) this.addMom('squares', dt * 0.35 * held);
+    if (avgPanic > 0) this.addMom('gas', -dt * 0.8 * avgPanic);
+    if (this.protCount < this.pop * 0.15) this.addMom('crowd', -dt * 0.4);
+    this.updateMomRates(dt);
     this.authority = Math.min(100, this.authority + dt * 0.75);
     this.aiAuthority = Math.min(100, this.aiAuthority + dt * (this.level.aiRegen || 0.7));
     for (const k in this.cooldowns) if (this.cooldowns[k] > 0) this.cooldowns[k] -= dt;

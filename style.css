@@ -177,3 +177,14 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 1px; b
 /* the coach panel never swallows clicks meant for the street under it */
 #tutorial { pointer-events: none; }
 #tutorial button { pointer-events: auto; }
+
+/* TV / projector overscan: keep the whole HUD inside a safe margin */
+:root { --safe: 0; }
+#hud { position: absolute; inset: calc(var(--safe) * 1vh) calc(var(--safe) * 1vw); }
+#padHints { bottom: calc(92px + var(--safe) * 1vh); }
+.padOnly { display: none; }
+body.pad .padOnly { display: inline-block; }
+.pb { min-width: 20px; padding: 1px 6px; margin-right: 7px; border-radius: 10px; color: #111; font-size: 11px; text-align: center; }
+.pb-a { background: #5fd35f; } .pb-b { background: #ff6b5b; }
+#resWhy { font-size: 11px; color: var(--mut); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#resWhy b.up { color: #7dff9a; } #resWhy b.down { color: #ff7d7d; }

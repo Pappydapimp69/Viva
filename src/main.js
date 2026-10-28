@@ -11,7 +11,9 @@
     get(k, d) { try { const v = localStorage.getItem('pave.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('pave.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
   };
-  const settings = Object.assign({ vol: 0.7, crowd: 1, edge: false, fps: false, full: false }, store.get('settings', {}));
+  const settings = Object.assign({ vol: 0.7, crowd: 1, edge: false, fps: false, full: false, safe: 0 }, store.get('settings', {}));
+  const applySafe = () => document.documentElement.style.setProperty('--safe', String(settings.safe || 0));
+  applySafe();
   const progress = Object.assign({ unlocked: 1, stars: {}, ach: {}, tut: {} }, store.get('progress', {}));
   progress.tut = progress.tut || {};
   const saveSettings = () => store.set('settings', settings);
@@ -128,9 +130,11 @@
 
   function loadSettingsUI() {
     $('setVol').value = settings.vol; $('setCrowd').value = String(settings.crowd);
+    $('setSafe').value = settings.safe || 0;
     $('setEdge').checked = settings.edge; $('setFps').checked = settings.fps; $('setFull').checked = !!document.fullscreenElement;
   }
   $('setVol').oninput = (e) => { settings.vol = +e.target.value; audio.setVolume(settings.vol); saveSettings(); };
+  $('setSafe').oninput = (e) => { settings.safe = +e.target.value; applySafe(); saveSettings(); };
   $('setCrowd').onchange = (e) => { settings.crowd = +e.target.value; saveSettings(); };
   $('setEdge').onchange = (e) => { settings.edge = e.target.checked; saveSettings(); };
   $('setFps').onchange = (e) => { settings.fps = e.target.checked; saveSettings(); $('fps').textContent = ''; };
@@ -237,7 +241,7 @@
   ];
   const tools = () => (world && world.side === S.PROTEST ? PROT_TOOLS : POL_TOOLS);
   function res() { return world.side === S.PROTEST ? world.momentum : world.authority; }
-  function spend(n) { if (world.side === S.PROTEST) world.momentum -= n; else world.authority -= n; }
+  function spend(n) { if (world.side === S.PROTEST) world.addMom('spent', -n); else world.authority -= n; }
 
   function buildToolbar() {
     const tb = $('toolbar');
@@ -495,6 +499,7 @@
   function togglePause() {
     if (!world || world.result) return;
     paused = !paused;
+    $('psSkipTut').classList.toggle('hidden', !(tut && !tut.finished));
     if (paused) show('pauseMenu'); else hideScreens();
   }
 
@@ -505,8 +510,14 @@
   const PB = P.PAD;
   let lastInput = 'mouse', padFocus = null, padCur = { x: 0, y: 0, init: false };
 
+  // in-game panels with buttons (tutorial finish card) are menus for the pad too
+  function modalEl() {
+    if (current || !world) return null;
+    for (const el of document.querySelectorAll('#hud .padModal')) if (el.offsetParent !== null && !el.classList.contains('hidden')) return el;
+    return null;
+  }
   function focusables() {
-    const scr = current && $(current);
+    const scr = current ? $(current) : modalEl();
     if (!scr) return [];
     return Array.from(scr.querySelectorAll('button, select, input')).filter((el) =>
       el.offsetParent !== null && !el.classList.contains('hidden') && !el.classList.contains('locked') && !el.disabled);
@@ -676,12 +687,13 @@
     document.body.classList.toggle('pad', on);
     const st = $('padStatus');
     if (st) st.textContent = pad.connected ? pad.id.replace(/\s*\(.*$/, '').slice(0, 40) : 'None — press a button on it';
-    const inGame = !!world && !current;
+    const modal = modalEl();
+    const inGame = !!world && !current && !modal;
     $('padCursor').classList.toggle('hidden', !(on && inGame));
     $('padLabel').classList.toggle('hidden', !(on && inGame));
     $('padHints').classList.toggle('hidden', !(on && inGame));
     if (!pad.connected) return;
-    if (current) { if (on) menuPad(); }
+    if (current || modal) { if (on) menuPad(); }
     else if (world) {
       gamePad(dt);
       $('padCursor').style.transform = `translate(${padCur.x}px, ${padCur.y}px)`;
@@ -700,6 +712,7 @@
   $('psResume').onclick = () => togglePause();
   $('psRestart').onclick = () => { paused = true; start(level, levelIdx < 0); };
   $('psQuit').onclick = () => quitToMenu();
+  $('psSkipTut').onclick = () => { if (tut) { tut.destroy(); tut = null; } $('tutorial').classList.add('hidden'); togglePause(); };
   function quitToMenu() { if (tut) { tut.destroy(); tut = null; } $('tutorial').classList.add('hidden'); world = null; paused = true; $('hud').classList.add('hidden'); show('mainMenu'); }
 
   // ------------------------------------------------------------ overlay (world space)
@@ -835,6 +848,15 @@
     const r = res();
     $('resFill').style.width = r + '%';
     $('resVal').textContent = Math.floor(r);
+    // why the bar moves: net rate and the biggest sources, per minute
+    if (world.side === S.PROTEST) {
+      const NAMES = { crowd: 'crowd', squares: 'squares', fires: 'fires', fireworks: 'mortars', gas: 'tear gas', arrests: 'arrests', spent: 'spent' };
+      const rs = Object.entries(w.momRate).filter(([, v]) => Math.abs(v) >= 0.5);
+      const net = rs.filter(([k]) => k !== 'spent').reduce((a, [, v]) => a + v, 0);
+      rs.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+      $('resWhy').innerHTML = '<b class="' + (net >= 0 ? 'up' : 'down') + '">' + (net >= 0 ? '+' : '') + net.toFixed(0) + '/min</b> ' +
+        rs.filter(([k]) => k !== 'spent').slice(0, 3).map(([k, v]) => NAMES[k] + ' ' + (v >= 0 ? '+' : '') + v.toFixed(0)).join(' · ');
+    } else $('resWhy').innerHTML = '<b class="up">+45/min</b> refills on its own';
     $('cProt').textContent = P.fmtNum(w.protCount - w.cassCount);
     $('cCass').textContent = P.fmtNum(w.cassCount);
     $('cPol').textContent = P.fmtNum(w.polCount);

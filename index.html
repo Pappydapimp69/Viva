@@ -22,6 +22,7 @@
     </div>
     <div id="topRight" class="panel">
       <div class="resRow"><span id="resLabel">MOMENTUM</span><div class="bar"><div id="resFill"></div></div><b id="resVal">50</b></div>
+      <div id="resWhy"></div>
       <div class="counts">
         <span title="Protesters">✊ <b id="cProt">0</b></span>
         <span title="Casseurs">🖤 <b id="cCass">0</b></span>
@@ -39,10 +40,10 @@
         <div class="tutFoot"><div class="tutDots"></div><button id="tutContinue" class="tutContinue hidden"></button></div>
         <button id="tutSkip" class="tutSkip">skip tutorial</button>
       </div>
-      <div class="tutEnd hidden">
+      <div class="tutEnd padModal hidden">
         <div class="tutTitle">Tutorial complete ✔</div>
         <div class="tutText">You know every control. The campaign mixes both sides.</div>
-        <div class="row"><button id="tutStay">KEEP PLAYING HERE</button><button id="tutCampaign" class="big">TO THE CAMPAIGN</button></div>
+        <div class="row"><button id="tutStay" class="back"><span class="padOnly pb pb-b">B</span>KEEP PLAYING HERE</button><button id="tutCampaign" class="big"><span class="padOnly pb pb-a">A</span>TO THE CAMPAIGN</button></div>
       </div>
     </div>
     <div id="toolbar"></div>
@@ -111,6 +112,7 @@
     <div class="form">
       <label>Volume <input id="setVol" type="range" min="0" max="1" step="0.05"></label>
       <label>Crowd density <select id="setCrowd"><option value="0.5">Low (fast PCs not needed)</option><option value="1">Normal</option><option value="1.5">High</option><option value="2.5">Insane</option></select></label>
+      <label>Screen margin (TV / projector) <input id="setSafe" type="range" min="0" max="8" step="1"></label>
       <label>Edge scrolling <input id="setEdge" type="checkbox"></label>
       <label>Show FPS <input id="setFps" type="checkbox"></label>
       <label>Fullscreen <input id="setFull" type="checkbox"></label>
@@ -155,6 +157,7 @@
         <button id="psRestart">RESTART</button>
         <button data-go="settings">SETTINGS</button>
         <button data-go="howto">HOW TO PLAY</button>
+        <button id="psSkipTut" class="hidden">SKIP TUTORIAL</button>
         <button id="psQuit">QUIT TO MENU</button>
       </div>
     </div>

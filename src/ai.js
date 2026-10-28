@@ -124,7 +124,7 @@
       }
       if (best) {
         w.launchFireworks(best.b.cx, best.b.cy, best.sq.ax, best.sq.ay);
-        w.momentum -= 3;
+        w.addMom('spent', -3);
         this.fwT = lv.aiFireworks || 14;
       } else this.fwT = 3;
     }

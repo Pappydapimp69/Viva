@@ -122,6 +122,12 @@ async function run(side, dev) {
   }
   const fin = await ev(() => ({ done: !!(PAVE.debug.tut && PAVE.debug.tut.finished), saved: JSON.parse(localStorage.getItem('pave.progress') || '{}').tut }));
   log.push((fin.done ? 'ok   ' : 'FAIL ') + side + '/' + dev + '  finished, saved ' + JSON.stringify(fin.saved));
+  // the finish card must work with this device too
+  await p.screenshot({ path: path.join(__dirname, 'out', 'tut-end-' + side + '-' + dev + '.png') });
+  if (dev === 'pad') { await sleep(300); await tap(0); } // focus lands on the primary button by itself: one press
+  else await p.click('#tutCampaign');
+  const toCampaign = await p.waitForFunction(() => PAVE.debug.screen === 'campaignMenu', null, { timeout: 4000 }).then(() => true, () => false);
+  log.push((toCampaign ? 'ok   ' : 'FAIL ') + side + '/' + dev + '  finish card: TO THE CAMPAIGN works');
   await p.screenshot({ path: path.join(__dirname, 'out', 'tut-' + side + '-' + dev + '.png') });
   if (errs.length) log.push('FAIL page errors: ' + errs.join(' | '));
   await b.close();
