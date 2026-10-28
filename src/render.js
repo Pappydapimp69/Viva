@@ -609,7 +609,9 @@
       const s = this.toScreen(cam, lm.x, lm.y - lm.r - 2.5);
       if (s.x < -100 || s.x > cw + 100 || s.y < -40 || s.y > ch + 40) continue;
       g.font = '900 13px "Arial Black", "Segoe UI", sans-serif';
-      const txt = (lm.owner === 'protest' ? '✊ ' : '🛡 ') + 'PLACE DE LA ' + lm.name.toUpperCase();
+      let txt = (lm.owner === 'protest' ? '✊ ' : '🛡 ') + 'PLACE DE LA ' + lm.name.toUpperCase();
+      // while the crowd is taking it: progress and how fast (more people, faster)
+      if (lm.owner !== 'protest' && lm.speed > 0) txt += '  ▲ ' + Math.round(Math.max(0, lm.control) * 100) + '%  ×' + (lm.speed < 10 ? lm.speed.toFixed(1) : Math.round(lm.speed));
       const tw = g.measureText(txt).width + 16;
       g.fillStyle = lm.owner === 'protest' ? 'rgba(200,40,30,0.85)' : 'rgba(25,45,95,0.85)';
       g.fillRect(s.x - tw / 2, s.y - 11, tw, 20);

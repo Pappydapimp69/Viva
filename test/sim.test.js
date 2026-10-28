@@ -210,3 +210,13 @@ test('protesters walk through their own barricade; police are stopped and beat i
   assert.ok(side(qi) < 0.5, 'police officer did not pass through');
   assert.ok(hpDropped, 'police contact damaged the barricade');
 });
+
+test('capturing speeds up with more protesters, without an early plateau', () => {
+  const s = (n) => P.captureSpeed(n, 10); // 10 officers on the square
+  assert.ok(s(200) > s(100) && s(400) > s(200) && s(800) > s(400), 'keeps rising');
+  assert.ok(s(800) / s(200) > 2, 'four times the crowd is more than twice as fast');
+  assert.ok(s(1e6) <= 12, 'capped');
+  // seconds to take a square from the start (control -0.2 -> 1) at 1x captureMul
+  const secs = (n) => 1.2 / (0.006 * s(n));
+  assert.ok(secs(2000) >= 15, 'a packed square still takes a moment: ' + secs(2000).toFixed(0) + 's');
+});

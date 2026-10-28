@@ -642,7 +642,8 @@
         }
       lm.prot = prot; lm.pol = pol;
       const prev = lm.owner;
-      if (prot > 25 && prot > pol * 4) lm.control += dt * 0.006 * (this.level.captureMul || 1) * Math.min(3, prot / (pol * 4 + 25));
+      lm.speed = 0;
+      if (prot > 25 && prot > pol * 4) { lm.speed = P.captureSpeed(prot, pol); lm.control += dt * 0.006 * (this.level.captureMul || 1) * lm.speed; }
       else if (pol > 4 && pol * 4 >= prot) lm.control -= dt * 0.02 * Math.min(3, (pol * 4 + 1) / (prot + 10));
       else lm.control += (lm.owner === 'protest' ? 0.004 : -0.004) * dt;
       lm.control = P.clamp(lm.control, -1, 1);
@@ -775,6 +776,13 @@
     this.checkObjectives();
   };
 
+  // Capture speed multiplier: keeps growing with the crowd (no early plateau), with
+  // diminishing returns and a ceiling so a packed square still takes a few seconds.
+  // ~1x at a bare majority, ~2.3x at 3x the needed crowd, ~5.6x at 10x, capped at 12x.
+  P.captureSpeed = function (prot, pol) {
+    const adv = prot / (pol * 4 + 25);
+    return Math.min(12, Math.pow(adv, 0.75));
+  };
   P.TRUCK_SURROUND = 16;   // crowd press (casseurs x2) that pins a truck
   P.TRUCK_ABANDON_S = 5;   // seconds pinned before the crew walks away
   P.TRUCK_RECOVER_S = 8;   // seconds clear before the crew returns
