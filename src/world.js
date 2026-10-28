@@ -381,6 +381,7 @@
     dP.fill(0); dC.fill(0); dPol.fill(0); dCh.fill(0);
     let pc = 0, ccx = 0, ccy = 0, polc = 0, pcx = 0, pcy = 0, cass = 0;
     for (const b of this.blocs) { b.n = 0; b.sx = 0; b.sy = 0; }
+    for (const sq of this.squads) { sq.cnt = 0; sq.sumx = 0; sq.sumy = 0; }
     const blocs = this.blocs;
     for (let i = 0; i < n; i++) {
       const xi = cr.x[i], yi = cr.y[i];
@@ -389,7 +390,7 @@
       if (k === K.POL) {
         dPol[ci]++; polc++; pcx += xi; pcy += yi;
         const sq = this.squads[cr.grp[i]];
-        if (sq && sq.charge > 0) dCh[ci]++;
+        if (sq) { sq.cnt++; sq.sumx += xi; sq.sumy += yi; if (sq.charge > 0) dCh[ci]++; }
       } else {
         dP[ci]++; pc++; ccx += xi; ccy += yi;
         if (k === K.CASS) { dC[ci]++; cass++; }
@@ -398,6 +399,8 @@
       }
     }
     for (const b of blocs) if (b.n) { b.cx = b.sx / b.n; b.cy = b.sy / b.n; }
+    // where each squad actually IS (its anchor is where it is going)
+    for (const sq of this.squads) { if (sq.cnt) { sq.mx = sq.sumx / sq.cnt; sq.my = sq.sumy / sq.cnt; } else { sq.mx = sq.ax; sq.my = sq.ay; } }
     this.protCount = pc; this.polCount = polc; this.cassCount = cass;
     if (pc) { this.protCx = ccx / pc; this.protCy = ccy / pc; }
     if (polc) { this.polCx = pcx / polc; this.polCy = pcy / polc; }

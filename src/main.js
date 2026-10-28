@@ -363,6 +363,11 @@
       case 'move': {
         const i = nearestAgent(wx, wy, (k) => k === K.POL, 3);
         if (i >= 0) { selSquad = world.crowd.grp[i]; audio.play('ui'); return; }
+        // also select by clicking where a squad stands as a group (its centre)
+        for (let q = 0; q < world.squads.length; q++) {
+          const sq = world.squads[q];
+          if (sq.mx != null && Math.hypot(sq.mx - wx, sq.my - wy) < 5) { selSquad = q; audio.play('ui'); return; }
+        }
         orderSel(wx, wy, false);
         break;
       }
@@ -585,14 +590,14 @@
     const consider = (x, y, kind, ref) => { const d = (x - wx) ** 2 + (y - wy) ** 2; if (d < bd) { bd = d; best = { x, y, kind, ref }; } };
     if (world.side === S.POLICE) {
       if (tool === 'truck') { for (const c of world.map.cars) if (c.state === 1) consider(c.cx, c.cy, 'fire', c); }
-      else if (tool === 'move' || tool === 'charge') world.squads.forEach((sq, i) => { if (i !== selSquad || tool === 'move') consider(sq.ax, sq.ay, 'squad', i); });
+      else if (tool === 'move' || tool === 'charge') world.squads.forEach((sq, i) => { if (i !== selSquad || tool === 'move') consider(sq.mx != null ? sq.mx : sq.ax, sq.my != null ? sq.my : sq.ay, 'squad', i); });
       if (tool === 'charge' || tool === 'gas') {
         const cr = world.crowd; // nearest casseur cluster point
         for (let i = 0; i < cr.n; i += 3) if (cr.kind[i] === K.CASS) consider(cr.x[i], cr.y[i], 'casseur', null);
       }
     } else {
       if (tool === 'march') for (const lm of world.map.landmarks) consider(lm.x, lm.y, 'landmark', lm);
-      if (tool === 'fireworks') world.squads.forEach((sq, i) => consider(sq.ax, sq.ay, 'squad', i));
+      if (tool === 'fireworks') world.squads.forEach((sq, i) => consider(sq.mx != null ? sq.mx : sq.ax, sq.my != null ? sq.my : sq.ay, 'squad', i));
       if (tool === 'casseurs') world.blocs.forEach((b) => { if (b.n > 50) consider(b.cx, b.cy, 'bloc', b); });
     }
     return best;

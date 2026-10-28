@@ -88,8 +88,8 @@
         t.w.orderSquad(sq, b.cx + dx / d * 22, b.cy + dy / d * 22, false, true);
         t.w.momentum = Math.max(t.w.momentum, 40);
       },
-      at: (t) => { const sq = t.w.squads[0]; return { x: sq.ax, y: sq.ay, r: 6 }; },
-      ev: (e, t) => e.type === 'fireworks' && Math.hypot(e.x - t.w.squads[0].ax, e.y - t.w.squads[0].ay) < 14,
+      at: (t) => { const sq = t.w.squads[0]; return { x: sq.mx != null ? sq.mx : sq.ax, y: sq.my != null ? sq.my : sq.ay, r: 6 }; },
+      ev: (e, t) => { const sq = t.w.squads[0]; return e.type === 'fireworks' && Math.min(Math.hypot(e.x - sq.ax, e.y - sq.ay), Math.hypot(e.x - (sq.mx || sq.ax), e.y - (sq.my || sq.ay))) < 14; },
     },
     {
       title: 'Build a barricade',
@@ -123,7 +123,7 @@
       pad: 'The blue lines are your CRS companies. Move onto the marked squad, <b>{sq1}</b> (the cursor snaps to it), and press ' + btn('A') + '.',
       hi: '#sq_1',
       setup(t) { t.api.pickTool('move'); if (t.api.selSquad === 1) t.api.setSelSquad(0); },
-      at: (t) => { const sq = t.w.squads[1]; return { x: sq.ax, y: sq.ay, r: 6 }; },
+      at: (t) => { const sq = t.w.squads[1]; return { x: sq.mx != null ? sq.mx : sq.ax, y: sq.my != null ? sq.my : sq.ay, r: 6 }; },
       done: (t) => t.api.selSquad === 1,
     },
     {
