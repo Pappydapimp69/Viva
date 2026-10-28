@@ -21,6 +21,7 @@
     truckSurrounded: ['on encercle le camion {street} 🚒', 'bloquez les pompiers {street}'],
     truckAbandoned: ['les pompiers ont lâché le camion 😮', 'camion bloqué {street}, il bouge plus'],
     truckRecovered: ['ils ont récupéré le camion {street}'],
+    barricadeDown: ['ils ont cassé la barricade {street} 😡'],
   };
   const POL = {
     ignite: ['Feu de véhicule, {street}.', 'Départ de feu signalé {street}.'],
@@ -36,6 +37,7 @@
     truckSurrounded: ['VSAV encerclé {street}, dégagez-le !'],
     truckAbandoned: ['Équipage évacué, véhicule abandonné {street}.'],
     truckRecovered: ['Véhicule récupéré {street}.'],
+    barricadeDown: ['Barricade dégagée {street}.'],
   };
 
   function Chat(el, side, map) {

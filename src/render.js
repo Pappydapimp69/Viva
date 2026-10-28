@@ -399,6 +399,22 @@
         g.fillStyle = '#3e2c1d'; g.fillRect(x + 0.55, y + 0.15, 0.35, 0.7);
       }
     }
+    // barricade health: shown while it's being hit (and briefly once built), fading after;
+    // length carries the value, colour only backs it up
+    for (const bg of (w.barrGroups || [])) {
+      if (bg.alive <= 0) continue;
+      const since = Math.min(w.time - bg.hitAt, w.time - bg.madeAt);
+      if (since > 3) continue;
+      if (bg.x < vx0 - 10 || bg.x > vx1 + 10 || bg.y < vy0 - 10 || bg.y > vy1 + 10) continue;
+      const f = w.barrHealth(bg), a = since < 2 ? 1 : 1 - (since - 2);
+      const bw = Math.max(5, Math.min(12, bg.tiles.length * 0.8)), bh = Math.max(0.5, 5 / z);
+      const x = bg.x - bw / 2, y = bg.y - 2.6;
+      g.globalAlpha = a;
+      g.fillStyle = 'rgba(0,0,0,0.75)'; g.fillRect(x - 0.15, y - 0.15, bw + 0.3, bh + 0.3);
+      g.fillStyle = bg.kind === 1 ? (f > 0.5 ? '#f0a020' : f > 0.25 ? '#f06a20' : '#e02a20') : '#9fb6d8';
+      g.fillRect(x, y, bw * f, bh);
+      g.globalAlpha = 1;
+    }
     // cars
     for (const c of map.cars) {
       if (c.cx < vx0 - 4 || c.cx > vx1 + 4 || c.cy < vy0 - 4 || c.cy > vy1 + 4) continue;

@@ -41,6 +41,8 @@
     this.carDirtyAt = -1;
     this.fieldQueue = [];
     this.night = !!level.night;
+    this.barrGroups = [];           // one per placed line: tiles, max hp, last time hit
+    this.barrId = new Int32Array(map.N).fill(-1);
     this.wind = { x: 0.35, y: -0.55 };
 
     // exit field (to the map edges) — used by people who give up and go home
@@ -315,14 +317,24 @@
   World.prototype.hitBarricade = function (k, kind, dt) {
     const map = this.map, bk = map.barrKind[k];
     if ((kind === K.POL && bk === 1) || (kind === K.CASS && bk === 2) || (kind === K.PROT && bk === 2 && this.rng() < 0.3)) {
-      map.barr[k] -= dt * (kind === K.POL ? 0.45 : 0.25);
+      map.barr[k] -= dt * (kind === K.POL ? 0.6 : 0.25);
+      const gid = this.barrId[k];
+      if (gid >= 0) this.barrGroups[gid].hitAt = this.time;
       if (map.barr[k] <= 0) this.removeBarricade(k);
     }
+  };
+  World.prototype.barrHealth = function (g) {
+    let hp = 0;
+    for (const k of g.tiles) if (this.barrId[k] === g.id) hp += Math.max(0, this.map.barr[k]);
+    return hp / g.max;
   };
 
   World.prototype.removeBarricade = function (k) {
     const map = this.map;
     map.barr[k] = 0; map.barrKind[k] = 0;
+    const gid = this.barrId[k];
+    this.barrId[k] = -1;
+    if (gid >= 0) { const g = this.barrGroups[gid]; g.alive--; if (g.alive <= 0) this.emit('barricadeDown', { x: g.x, y: g.y, kind: g.kind }); }
     map.solid[k] = map.carAt[k] >= 0 ? 1 : 0;
     this.markMapChanged();
   };
@@ -346,6 +358,7 @@
       if (e2 < dx) { err += dx; y += syn; }
     }
     let placed = 0;
+    const g = { id: this.barrGroups.length, kind, tiles: [], max: 0, alive: 0, x: 0, y: 0, hitAt: -99, madeAt: this.time };
     for (let i = 0; i < pts.length && placed < (maxTiles || 999); i += 2) {
       const px = pts[i], py = pts[i + 1];
       if (px < 1 || py < 1 || px >= W - 1 || py >= map.H - 1) continue;
@@ -353,8 +366,10 @@
       if (map.solid[k]) continue;
       if (map.tile[k] === P.T.MONUMENT) continue;
       map.barr[k] = kind === 1 ? 7 : 12; map.barrKind[k] = kind; map.solid[k] = 1;
+      this.barrId[k] = g.id; g.tiles.push(k); g.max += map.barr[k]; g.alive++; g.x += px + 0.5; g.y += py + 0.5;
       placed++;
     }
+    if (placed) { g.x /= placed; g.y /= placed; this.barrGroups.push(g); }
     if (placed) { this.markMapChanged(); this.emit('barricade', { x: (x0 + x1) / 2, y: (y0 + y1) / 2, kind, n: placed }); }
     return placed;
   };

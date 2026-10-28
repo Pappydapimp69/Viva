@@ -256,17 +256,20 @@
       // walls / cars / barricades, one axis at a time so agents slide
       if (nx < 0.05) nx = 0.05; else if (nx > W - 0.05) nx = W - 0.05;
       if (ny < 0.05) ny = 0.05; else if (ny > H - 0.05) ny = H - 0.05;
+      // protest barricades (kind 1) stop police and trucks, never the protesters who built them
+      const through = k !== K.POL;
       let kx = (yi | 0) * W + (nx | 0);
-      if (solid[kx]) {
+      if (solid[kx] && !(through && barrKind[kx] === 1 && carAt[kx] < 0)) {
         if (barr[kx] > 0) w.hitBarricade(kx, k, dt);
         nx = xi; nvx *= -0.2;
       }
       let ky = (ny | 0) * W + (nx | 0);
-      if (solid[ky]) {
+      if (solid[ky] && !(through && barrKind[ky] === 1 && carAt[ky] < 0)) {
         if (barr[ky] > 0) w.hitBarricade(ky, k, dt);
         ny = yi; nvy *= -0.2;
       }
-      if (solid[(ny | 0) * W + (nx | 0)]) {
+      const kn = (ny | 0) * W + (nx | 0);
+      if (solid[kn] && !(through && barrKind[kn] === 1 && carAt[kn] < 0)) {
         // something solid appeared on top of us (a new barricade): pop out
         const o = map.nearestOpen(nx, ny, 6);
         if (o) { nx = o.x; ny = o.y; }

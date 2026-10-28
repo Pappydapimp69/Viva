@@ -14,6 +14,7 @@
     this.dx = new Float32Array(map.N);
     this.dy = new Float32Array(map.N);
     this.roadOnly = !!(opts && opts.roadOnly);
+    this.passBarr = !(opts && opts.roadOnly); // walkers path through protest barricades (protesters cross, police bash)
     this.sources = null;
     this.ready = false;
     this.dirty = false;
@@ -38,7 +39,9 @@
       }
       heap[i] = key;
     };
-    const blocked = (k) => solid[k] || (roadOnly && tile[k] !== 0 && tile[k] !== 2 && tile[k] !== 1 && tile[k] !== 7); // road, plaza, sidewalk, bridge
+    const barrKind = map.barrKind, carAt = map.carAt, passBarr = this.passBarr;
+    const blocked = (k) => (solid[k] && !(passBarr && barrKind[k] === 1 && carAt[k] < 0)) ||
+      (roadOnly && tile[k] !== 0 && tile[k] !== 2 && tile[k] !== 1 && tile[k] !== 7); // road, plaza, sidewalk, bridge
     for (const s of this.sources) {
       if (s < 0 || s >= N || blocked(s)) continue;
       if (dist[s] !== 0) { dist[s] = 0; push(s); }

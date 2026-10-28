@@ -98,8 +98,8 @@
     },
     {
       title: 'Build a barricade',
-      mk: 'Press ' + kb('4') + ' for <b>Barricade</b>, then <b>click and drag</b> across a street near your people. Release to build.',
-      pad: 'Press ' + btn('RB') + ' until <b>BARRICADE</b>. <b>Hold</b> ' + btn('A') + ', move across a street near your people, then <b>release</b>.',
+      mk: 'Press ' + kb('4') + ' for <b>Barricade</b>, then <b>click and drag</b> across a street near your people. Your people walk straight through it; police have to beat it down.',
+      pad: 'Press ' + btn('RB') + ' until <b>BARRICADE</b>. <b>Hold</b> ' + btn('A') + ', move across a street near your people, then <b>release</b>. Your people walk through it; police have to beat it down.',
       hi: '#tool_barricade',
       setup(t) { t.w.momentum = Math.max(t.w.momentum, 40); },
       ev: (e) => e.type === 'barricade' && e.kind === 1,

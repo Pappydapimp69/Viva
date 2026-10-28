@@ -176,3 +176,37 @@ test('an ordinary crowd lets a fire truck through', () => {
   w.crowd.sx.set(w.crowd.x.subarray(0, w.crowd.n)); w.crowd.sy.set(w.crowd.y.subarray(0, w.crowd.n)); w.crowd.buildGrid();
   assert.strictEqual(w.crowdPressAt(tr.x, tr.y, 3.5), 0);
 });
+
+test('protesters walk through their own barricade; police are stopped and beat it down', () => {
+  const w = new P.World(P.LEVELS[0], {});
+  const m = w.map;
+  // a straight street: find a spot whose narrowest crossing is a normal street width
+  let spot = null;
+  for (const s of m.streets) { if (s.w < 9 || s.w > 14) continue; const [x, y] = s.pts[Math.floor(s.pts.length / 2)]; const cl = m.walkable(x, y) && m.crossLine(x, y, 14); if (cl && cl.span > 6 && cl.span < 16) { spot = { x, y, cl }; break; } }
+  assert.ok(spot, 'found a street');
+  const { x, y, cl } = spot;
+  const n = w.placeBarricade(x - cl.ux * (cl.a + 1), y - cl.uy * (cl.a + 1), x + cl.ux * (cl.b + 1), y + cl.uy * (cl.b + 1), 1, 40);
+  assert.ok(n > 0);
+  const g = w.barrGroups[w.barrGroups.length - 1];
+  assert.ok(Math.abs(w.barrHealth(g) - 1) < 1e-9, 'starts at full health');
+  // the street runs along (nx, ny), perpendicular to the barricade
+  const nx = -cl.uy, ny = cl.ux;
+  // a protester and a police officer each try to walk straight across
+  w.crowd.n = 0;
+  const pi = w.crowd.add(P.K.PROT, x - nx * 3, y - ny * 3, 0);
+  const sq = w.squads[0];
+  const qi = w.crowd.add(P.K.POL, x - nx * 3 + cl.ux, y - ny * 3 + cl.uy, sq.id, 0);
+  const tx = x + nx * 14, ty = y + ny * 14; // beyond the 5-tile "arrived, mill about" radius
+  w.setBlocTarget(0, tx, ty, null);
+  sq.charge = 0; sq.slotX[0] = tx + cl.ux; sq.slotY[0] = ty + cl.uy; sq.field.compute(P.discSources(m, tx, ty, 2));
+  const side = (i) => (w.crowd.x[i] - x) * nx + (w.crowd.y[i] - y) * ny;
+  let crossedP = false, hpDropped = false;
+  for (let t = 0; t < 30 * 6; t++) {
+    w.updateGrids(P.SIM_DT); w.crowd.step(w, P.SIM_DT);
+    if (side(pi) > 1) crossedP = true;
+    if (w.barrHealth(g) < 0.999) hpDropped = true;
+  }
+  assert.ok(crossedP, 'protester crossed its own barricade');
+  assert.ok(side(qi) < 0.5, 'police officer did not pass through');
+  assert.ok(hpDropped, 'police contact damaged the barricade');
+});
