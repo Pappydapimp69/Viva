@@ -198,4 +198,4 @@ body.pad .padOnly { display: inline-block; }
 #enFill { height: 100%; width: 60%; background: linear-gradient(90deg, #ffe066, var(--y)); transition: width .2s; }
 .ctlGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; width: min(980px, 94vw); background: rgba(16,17,20,.9); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
 .ctlRow { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
-.ctlRow span:first-child { color: #ddd; } .ctlRow span:last-child { text-align: right; color: #fff; }
+.ctlRow > span:first-child { color: #ddd; } .ctlRow > span:last-child { text-align: right; color: #fff; }
