@@ -163,7 +163,7 @@
   World.prototype.setBlocTarget = function (b, x, y, lmId) {
     const bloc = this.blocs[b];
     if (!bloc) return;
-    bloc.tx = x; bloc.ty = y; bloc.target = lmId == null ? -1 : lmId;
+    bloc.tx = x; bloc.ty = y; bloc.target = lmId == null ? -1 : lmId; bloc.truck = null;
     bloc.best = 1e9; bloc.stall = 0;
     bloc.field.compute(P.discSources(this.map, x, y, 3));
   };
@@ -596,7 +596,7 @@
   // makes way for the pompiers.
   World.prototype.crowdPressAt = function (x, y, r) {
     const cr = this.crowd, W = this.map.W, H = this.map.H, start = cr.start, items = cr.items;
-    const aimed = this.blocs.map((b) => (b.tx - x) ** 2 + (b.ty - y) ** 2 < 100);
+    const aimed = this.blocs.map((b) => (b.truck && Math.hypot(b.truck.x - x, b.truck.y - y) < 0.01) || (b.tx - x) ** 2 + (b.ty - y) ** 2 < 100);
     let n = 0;
     const r2 = r * r;
     for (let yy = Math.max(0, Math.floor(y - r)); yy <= Math.min(H - 1, Math.floor(y + r)); yy++)
@@ -786,6 +786,13 @@
     if (this.secTick >= 1) {
       this.secTick = 0;
       for (const b of this.blocs) b.arrive = 5;
+      // a bloc chasing a fire truck keeps its goal on the truck until the crew walks away
+      for (const b of this.blocs) {
+        const tr = b.truck;
+        if (!tr) continue;
+        if (tr.done || tr.state === 'abandoned' || !this.trucks.includes(tr)) { b.truck = null; continue; }
+        if (Math.hypot(tr.x - b.tx, tr.y - b.ty) > 3) { const keep = tr; this.setBlocTarget(b.id, tr.x, tr.y, null); b.truck = keep; }
+      }
     }
     this.ai.update(dt);
     this.checkObjectives();

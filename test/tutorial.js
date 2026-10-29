@@ -24,8 +24,11 @@ async function run(side, dev) {
   const press = (i, v) => ev(([i, v]) => { __pad.buttons[i] = { pressed: v, value: v ? 1 : 0 }; }, [i, v]);
   const tap = async (i) => { await press(i, true); await sleep(110); await press(i, false); await sleep(110); };
   const axes = (a) => ev((a) => { __pad.axes = a; }, a);
-  const steerTo = async (x, y) => {
+  // steer the centred reticle onto a point; pass track=true to follow the tutorial's
+  // (possibly moving) target each frame, like a player chasing a truck
+  const steerTo = async (x, y, track) => {
     for (let k = 0; k < 120; k++) {
+      if (track) { const tt = await ev(() => PAVE.debug.tut.target()); if (tt) { x = tt.x; y = tt.y; } }
       const o = await ev(([x, y]) => { const c = PAVE.debug.cam; return { dx: (x - c.x) * c.zoom, dy: (y - c.y) * c.zoom }; }, [x, y]);
       const d = Math.hypot(o.dx, o.dy);
       if (d < 6) break;
@@ -104,8 +107,12 @@ async function run(side, dev) {
       case 'Pin a fire truck': {
         if (dev === 'pad') await tap(1); else await key('1');
         const tr = await target();
-        if (tr) await act(tr);
-        await waitStepChange(title, 60000);
+        if (tr) { if (dev === 'pad') { await steerTo(tr.x, tr.y, true); await tap(0); } else await act(tr); }
+        const watch = async () => ev(() => { const w = PAVE.debug.world, t0 = PAVE.debug.tut.s.truck, b = w.blocs[PAVE.debug.selBloc || 0];
+          return t0 ? { tool: PAVE.debug.tool, snap: PAVE.debug.padSnap && PAVE.debug.padSnap.kind, truck: [t0.x | 0, t0.y | 0, t0.state, +(t0.sur || 0).toFixed(1), t0.press], bloc: [b.id, b.tx | 0, b.ty | 0, !!b.truck, b.n], sel: PAVE.debug.selBloc } : 'no truck'; });
+        if (process.env.TUT_DEBUG) console.log('DEBUG truck after A', JSON.stringify(await watch()));
+        const okT = await waitStepChange(title, 60000);
+        if (!okT && process.env.TUT_DEBUG) console.log('DEBUG truck at fail', JSON.stringify(await watch()));
         break;
       }
       case 'Tear gas!': {
@@ -141,7 +148,7 @@ async function run(side, dev) {
       case 'Form a line': if (dev === 'pad') await act(t); else await clickAt(t.x, t.y, 'right'); break;
       case 'Tear gas': {
         if (dev === 'pad') await toolUntil('gas'); else await key('g');
-        const g = await w(() => { const wd = PAVE.debug.world, sq = wd.squads[1]; return { x: sq.ax + sq.nx * 10, y: sq.ay + sq.ny * 10 }; });
+        const g = t || await w(() => { const wd = PAVE.debug.world, sq = wd.squads[PAVE.debug.selSquad]; return { x: sq.ax + sq.nx * 10, y: sq.ay + sq.ny * 10 }; });
         await act(g); break;
       }
       case 'Build a barricade': case 'Close a street': {
@@ -165,6 +172,7 @@ async function run(side, dev) {
   if (dev === 'pad') { await sleep(300); await tap(0); } // focus lands on the primary button by itself: one press
   else await p.click('#tutCampaign', { timeout: 4000 }).catch(() => {});
   const toCampaign = await p.waitForFunction(() => PAVE.debug.screen === 'campaignMenu', null, { timeout: 4000 }).then(() => true, () => false);
+  if (!toCampaign && process.env.TUT_DEBUG) console.log('DEBUG card', JSON.stringify(await ev(() => ({ screen: PAVE.debug.screen, focus: PAVE.debug.padFocus && (PAVE.debug.padFocus.id || PAVE.debug.padFocus.textContent), last: PAVE.debug.lastInput, end: !document.querySelector('.tutEnd').classList.contains('hidden'), paused: document.getElementById('pauseMenu').classList.contains('hidden') ? 'no' : 'pauseMenu' }))));
   log.push((toCampaign ? 'ok   ' : 'FAIL ') + side + '/' + dev + '  finish card: TO THE CAMPAIGN works');
   await p.screenshot({ path: path.join(__dirname, 'out', 'tut-' + side + '-' + dev + '.png') });
   if (errs.length) log.push('FAIL page errors: ' + errs.join(' | '));

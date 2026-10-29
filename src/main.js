@@ -369,9 +369,10 @@
         if (!map.nearestOpen(wx, wy, 10)) return tip('Can\'t march into a building');
         let lmId = null;
         // clicking a fire truck aims the bloc at the truck itself (to pin it), not the square it is on
-        const onTruck = world.trucks.some((tr) => tr.state !== 'abandoned' && Math.hypot(tr.x - wx, tr.y - wy) < 5);
+        const onTruck = world.trucks.find((tr) => tr.state !== 'abandoned' && Math.hypot(tr.x - wx, tr.y - wy) < 5) || null;
         if (!onTruck) for (const lm of map.landmarks) if (Math.hypot(lm.x - wx, lm.y - wy) < lm.r + 3) { lmId = lm.id; wx = lm.x; wy = lm.y; }
         world.setBlocTarget(selBloc, wx, wy, lmId);
+        world.blocs[selBloc].truck = onTruck; // a bloc sent at a fire truck follows it
         audio.play('order');
         const name = lmId != null ? map.landmarks[lmId].name : map.streetAt(wx, wy);
         chat.me((world.blocs.length > 1 ? 'bloc ' + 'ABC'[selBloc] + ' → ' : 'on va ') + name + ' ✊');
@@ -594,7 +595,12 @@
     }
     return false;
   }
+  let modalSeen = null, modalAt = 0;
   function menuPad() {
+    // a panel that pops up mid-play ignores input held over from the game for a moment
+    const m = modalEl();
+    if (m !== modalSeen) { modalSeen = m; modalAt = performance.now(); }
+    if (m && performance.now() - modalAt < 600) { if (!padFocus || !focusables().includes(padFocus)) setFocus(defaultFocus(focusables())); return; }
     const list = focusables();
     // the first input on a screen only lands focus; it doesn't also move it
     if (!padFocus || !list.includes(padFocus)) { setFocus(defaultFocus(list)); return; }
@@ -637,7 +643,8 @@
       }
     } else {
       if (tool === 'march') for (const lm of world.map.landmarks) consider(lm.x, lm.y, 'landmark', lm);
-      if (tool === 'march' || tool === 'casseurs') for (const tr of world.trucks) if (tr.state !== 'abandoned') consider(tr.x, tr.y, 'truck', tr);
+      // trucks move: they get a wider snap so the reticle can catch one
+      if (tool === 'march' || tool === 'casseurs') for (const tr of world.trucks) if (tr.state !== 'abandoned' && (tr.x - wx) ** 2 + (tr.y - wy) ** 2 < (radius + 5) ** 2) { bd = 0; best = { x: tr.x, y: tr.y, kind: 'truck', ref: tr }; }
       if (tool === 'fireworks') world.squads.forEach((sq, i) => consider(sq.mx != null ? sq.mx : sq.ax, sq.my != null ? sq.my : sq.ay, 'squad', i));
       if (tool === 'casseurs') { const h = P.densAround(world, world.densP, wx, wy, 3); if (h.max >= 6) consider(h.x, h.y, 'bloc', null); }
     }
@@ -1032,5 +1039,5 @@
   requestAnimationFrame(frame);
 
   // test hook (used by the smoke test; harmless in game)
-  P.debug = { get world() { return world; }, get tut() { return tut; }, startTutorial, get padSnap() { return padSnap; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
+  P.debug = { get world() { return world; }, get selBloc() { return selBloc; }, get tut() { return tut; }, startTutorial, get padSnap() { return padSnap; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
 })();

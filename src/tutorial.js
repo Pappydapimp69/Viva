@@ -121,7 +121,8 @@
       title: 'Pin a fire truck',
       mk: 'A fire truck is coming for that fire. Press ' + kb('1') + ' for <b>March</b> and <b>left-click the truck</b>: your bloc packs round it. Pinned for a few seconds, the crew walks away and it stops spraying.',
       pad: 'A fire truck is coming for that fire. Press ' + btn('B') + ' for <b>March</b>, move onto the truck (the cursor snaps to it) and press ' + btn('A') + ': your bloc packs round it. Pinned for a few seconds, the crew walks away.',
-      setup(t) {
+      setup(t) { this.sendTruck(t); },
+      sendTruck(t) {
         const w = t.w, b = crowdSpot(t), m = w.map;
         let car = null, bd = Infinity;
         for (const c of m.cars) if (c.state === 1) { const d = Math.hypot(c.cx - b.x, c.cy - b.y); if (d < bd) { bd = d; car = c; } }
@@ -141,6 +142,11 @@
         w.trucksOut++;
         t.s.truck = w.trucks[w.trucks.length - 1];
         w.energy = Math.max(w.energy, 30);
+      },
+      tick(t) {
+        // the truck may put the fire out and drive home first: send another to another fire
+        const tr = t.s.truck;
+        if (tr && (tr.done || tr.state === 'back' || !t.w.trucks.includes(tr))) { t.s.truck = null; t.step().sendTruck(t); }
       },
       skip: (t) => !t.s.truck,
       at: (t) => t.s.truck && t.s.truck.state !== 'abandoned' ? { x: t.s.truck.x, y: t.s.truck.y, r: 6 } : null,
@@ -260,6 +266,15 @@
       pad: 'Press ' + btn('RB') + ' until <b>GAS</b>, aim at the crowd in front of a line and press ' + btn('A') + '. The selected squad throws it, so stay within 40 m. People in the cloud panic and some go home.',
       hi: '#tool_gas',
       setup(t) { t.w.authority = Math.max(t.w.authority, 60); },
+      // mark the thickest crowd within throwing range of whichever squad is selected
+      at: (t) => {
+        const sq = t.w.squads[t.api.selSquad] || t.w.squads[0], p = sqPos(sq);
+        const h = P.densAround(t.w, t.w.densP, p.x, p.y, 7);
+        if (h.max < 1) return null;
+        const d = Math.hypot(h.x - p.x, h.y - p.y);
+        const k = d > 32 ? 32 / d : 1;
+        return { x: p.x + (h.x - p.x) * k, y: p.y + (h.y - p.y) * k, r: 6 };
+      },
       ev: (e) => e.type === 'gas',
     },
     {
