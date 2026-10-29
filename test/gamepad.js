@@ -22,6 +22,15 @@ const path = require('path');
     await p.evaluate((i) => { __pad.buttons[i] = { pressed: false, value: 0 }; }, i);
     await p.waitForTimeout(120);
   };
+  const steer = async (x, y) => {
+    for (let k = 0; k < 150; k++) {
+      const o = await p.evaluate(([x, y]) => { const c = PAVE.debug.cam, r = PAVE.debug.reticle; return { dx: (x - r.x) * c.zoom, dy: (y - r.y) * c.zoom }; }, [x, y]);
+      const d = Math.hypot(o.dx, o.dy); if (d < 5) break;
+      const m = Math.min(1, Math.max(0.28, d / 260));
+      await p.evaluate(([a, b]) => { __pad.axes = [a, b, 0, 0]; }, [o.dx / d * m, o.dy / d * m]); await p.waitForTimeout(40);
+    }
+    await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(150);
+  };
   const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) process.exitCode = 1; };
 
   await tap(13); // any press activates pad mode + focuses the primary menu button
@@ -53,26 +62,27 @@ const path = require('path');
   await p.waitForTimeout(300);
   await tap(13); // re-assert pad mode in game
   ok(await p.evaluate(() => !document.getElementById('padCursor').classList.contains('hidden')), 'reticle visible in game');
-  const cam0 = await p.evaluate(() => PAVE.debug.cam.x);
+  const r0 = await p.evaluate(() => PAVE.debug.reticle.x);
   await p.evaluate(() => { __pad.axes = [0.9, 0, 0, 0]; }); await p.waitForTimeout(400); await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; });
-  ok(await p.evaluate((c) => PAVE.debug.cam.x > c + 2, cam0), 'left stick moves the camera');
+  ok(await p.evaluate((c) => PAVE.debug.reticle.x > c + 2, r0), 'left stick moves the view / reticle');
   // RB cycles tool
   const t0 = await p.evaluate(() => PAVE.debug.tool); await tap(5); const t1 = await p.evaluate(() => PAVE.debug.tool);
   ok(t0 !== t1, 'RB changes tool ' + t0 + ' -> ' + t1);
   await tap(4); ok(await p.evaluate(() => PAVE.debug.tool) === t0, 'LB goes back');
   await tap(5); await tap(1); ok(await p.evaluate(() => PAVE.debug.tool) === 'move', 'B cancels back to the default tool');
   // reticle snaps onto a squad, A selects it
-  const target = await p.evaluate(() => { const w = PAVE.debug.world, i = (PAVE.debug.selSquad + 1) % w.squads.length, sq = w.squads[i]; PAVE.debug.cam.x = sq.ax + 1; PAVE.debug.cam.y = sq.ay; return i; });
-  await p.waitForTimeout(150);
+  const tsq = await p.evaluate(() => { const w = PAVE.debug.world, i = (PAVE.debug.selSquad + 1) % w.squads.length, sq = w.squads[i]; return { i, x: sq.mx, y: sq.my }; });
+  const target = tsq.i;
+  await steer(tsq.x + 0.5, tsq.y);
   ok(await p.evaluate(() => PAVE.debug.padSnap && PAVE.debug.padSnap.kind === 'squad'), 'reticle snaps to the squad');
   await tap(0);
   ok(await p.evaluate((t) => PAVE.debug.selSquad === t, target), 'A on a squad selects it');
   // move away and A places its line there
   const a0 = await p.evaluate(() => PAVE.debug.world.squads[PAVE.debug.selSquad].ax);
-  await p.evaluate(() => { const w = PAVE.debug.world, m = w.map, sq = w.squads[PAVE.debug.selSquad];
+  const spot = await p.evaluate(() => { const w = PAVE.debug.world, m = w.map, sq = w.squads[PAVE.debug.selSquad];
     for (let r = 25; r < 120; r += 5) for (let a = 0; a < 6.28; a += 0.5) { const x = sq.ax + Math.cos(a) * r, y = sq.ay + Math.sin(a) * r;
-      if (m.walkable(x, y) && w.squads.every((q) => Math.hypot(q.ax - x, q.ay - y) > 20)) { PAVE.debug.cam.x = x; PAVE.debug.cam.y = y; return; } } });
-  await p.waitForTimeout(150);
+      if (m.walkable(x, y) && w.squads.every((q) => Math.hypot(q.mx - x, q.my - y) > 20)) return { x, y }; } });
+  await steer(spot.x, spot.y);
   await tap(0);
   const a1 = await p.evaluate(() => PAVE.debug.world.squads[PAVE.debug.selSquad].ax);
   ok(Math.abs(a0 - a1) > 5, 'A away from squads places the line there');
@@ -92,8 +102,9 @@ const path = require('path');
   await until(() => PAVE.debug.world && PAVE.debug.world.side === 'protest' && PAVE.debug.screen === null, null, 8000);
   await p.waitForTimeout(300);
   // aim near a landmark: the reticle snaps to it and A marches the bloc there
-  const lmId = await p.evaluate(() => { const lm = PAVE.debug.world.map.landmarks[1]; PAVE.debug.cam.x = lm.x + 3; PAVE.debug.cam.y = lm.y - 2; return lm.id; });
-  await p.waitForTimeout(150);
+  const lmt = await p.evaluate(() => { const lm = PAVE.debug.world.map.landmarks[1]; return { id: lm.id, x: lm.x + 3, y: lm.y - 2 }; });
+  const lmId = lmt.id;
+  await steer(lmt.x, lmt.y);
   ok(await p.evaluate(() => PAVE.debug.padSnap && PAVE.debug.padSnap.kind === 'landmark'), 'reticle snaps to the landmark');
   await tap(0);
   ok(await p.evaluate((id) => PAVE.debug.world.blocs[0].target === id, lmId), 'A marches the bloc to the snapped landmark');

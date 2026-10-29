@@ -58,6 +58,16 @@
     R.resize(canvas.width, canvas.height);
   }
   addEventListener('resize', resize);
+  // compact HUD on any small screen (by size, not by input device), with a portrait variant
+  function layout() {
+    const w = innerWidth, h = innerHeight;
+    document.body.classList.toggle('compact', Math.min(w, h) < 560 || w < 1100);
+    document.body.classList.toggle('portrait', h > w);
+  }
+  addEventListener('resize', layout);
+  layout();
+  // never zoom out past the point where the city fills the screen
+  const minZoom = () => (world ? Math.max(canvas.width / world.map.W, canvas.height / world.map.H) : 0.9);
   resize();
 
   // ------------------------------------------------------------ screens
@@ -494,7 +504,7 @@
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     if (!world) return;
-    cam.tz = P.clamp(cam.tz * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 0.9, 16);
+    cam.tz = P.clamp(cam.tz * (e.deltaY < 0 ? 1.15 : 1 / 1.15), minZoom(), 16);
   }, { passive: false });
   addEventListener('keydown', (e) => {
     keys[e.code] = true;
@@ -661,17 +671,37 @@
     if (pad.pressed(PB.BACK)) cycleSpeed();
     if (paused) return;
     if (pad.pressed(PB.A) && tut && tut.confirm()) return;
-    padCur.x = canvas.width / 2; padCur.y = canvas.height / 2; padCur.init = true;
+    // the reticle sits at screen centre and the stick moves the camera; at a map edge the
+    // camera stops and the reticle itself walks out to the edge (and back first, on return)
+    if (!padCur.init) { padCur.x = canvas.width / 2; padCur.y = canvas.height / 2; padCur.init = true; }
+    {
+      const z = cam.zoom, sp0 = 1100 * Math.pow(pad.lm, 1.6) / z * dt;
+      const axis = (cur, cam0, half, M, mv, scr) => {
+        // returns [newCam, newCursorScreen]
+        let off = (cur - scr / 2) / z;
+        const lo = half * 2 >= M ? M / 2 : half, hi = half * 2 >= M ? M / 2 : M - half;
+        // moving back toward the centre: bring the reticle home before the camera moves
+        if (off !== 0 && mv !== 0 && Math.sign(mv) !== Math.sign(off)) {
+          const back = Math.min(Math.abs(mv), Math.abs(off));
+          off += Math.sign(mv) * back; mv -= Math.sign(mv) * back;
+        }
+        let nc = cam0 + mv;
+        if (nc < lo) { off += nc - lo; nc = lo; } else if (nc > hi) { off += nc - hi; nc = hi; }
+        const lim = (scr / 2 - 16) / z;
+        off = Math.max(-lim, Math.min(lim, off));
+        return [nc, scr / 2 + off * z];
+      };
+      const mvx = pad.lm > 0 ? pad.lx / pad.lm * sp0 : 0, mvy = pad.lm > 0 ? pad.ly / pad.lm * sp0 : 0;
+      const sticky0 = padSnap && pad.lm < 0.7 ? 0.45 : 1;
+      [cam.x, padCur.x] = axis(padCur.x, cam.x, canvas.width / 2 / z, world.map.W, mvx * sticky0, canvas.width);
+      [cam.y, padCur.y] = axis(padCur.y, cam.y, canvas.height / 2 / z, world.map.H, mvy * sticky0, canvas.height);
+    }
     mouse.x = padCur.x; mouse.y = padCur.y;
     const c = toWorld(padCur.x, padCur.y);
     padSnap = snapTarget(c.x, c.y, 34 / cam.zoom + 2);
-    // pan: response curve for fine aim, sticky (slower) while hovering a target
-    const sticky = padSnap && pad.lm < 0.7 ? 0.45 : 1;
-    const sp = 1100 * Math.pow(pad.lm, 1.6) * sticky / cam.zoom * dt;
-    if (pad.lm > 0) { cam.x += pad.lx / pad.lm * sp; cam.y += pad.ly / pad.lm * sp; }
     // right stick: vertical zooms, triggers zoom too
     const zt = (pad.rt - pad.lt) - pad.ry;
-    if (Math.abs(zt) > 0.05) cam.tz = P.clamp(cam.tz * (1 + zt * dt * 2.4), 0.9, 16);
+    if (Math.abs(zt) > 0.05) cam.tz = P.clamp(cam.tz * (1 + zt * dt * 2.4), minZoom(), 16);
     if (Math.abs(pad.rx) > 0.05) cam.x += pad.rx * 400 / cam.zoom * dt;
 
     const w = padSnap ? { x: padSnap.x, y: padSnap.y } : c;
@@ -793,7 +823,7 @@
       tg.lx = p.x; tg.ly = p.y;
     } else if (tg.kind === 'two' && pts.length >= 2) {
       const [a, b] = pts, d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      cam.tz = cam.zoom = P.clamp(tg.z0 * d / tg.d0, 0.9, 16);
+      cam.tz = cam.zoom = P.clamp(tg.z0 * d / tg.d0, minZoom(), 16);
       cam.x -= (mx - tg.mx) / cam.zoom; cam.y -= (my - tg.my) / cam.zoom;
       tg.mx = mx; tg.my = my;
       mouse.x = mx; mouse.y = my;
@@ -996,6 +1026,9 @@
         '<b class="' + (net >= 0 ? 'up' : 'down') + '">' + (net >= 0 ? '+' : '') + net.toFixed(0) + '/min</b> ' +
         rs.filter(([k]) => k !== 'spent').slice(0, 3).map(([k, v]) => NAMES[k] + ' ' + (v >= 0 ? '+' : '') + v.toFixed(0)).join(' · ');
     } else $('resWhy').innerHTML = '<b class="up">+45/min</b> refills on its own';
+    // the chat phone hangs below the top-right panel, whatever height that panel has now
+    const tr = $('topRight').getBoundingClientRect(), hb = $('hud').getBoundingClientRect();
+    $('phone').style.top = Math.round(tr.bottom - hb.top + 10) + 'px';
     $('cProt').textContent = P.fmtNum(w.protCount - w.cassCount);
     $('cCass').textContent = P.fmtNum(w.cassCount);
     $('cPol').textContent = P.fmtNum(w.polCount);
@@ -1068,12 +1101,11 @@
       if (mouse.y < m) cam.y -= pan; if (mouse.y > canvas.height - m) cam.y += pan;
     }
     const before = toWorld(mouse.x, mouse.y);
+    cam.tz = Math.max(cam.tz, minZoom());
     cam.zoom += (cam.tz - cam.zoom) * Math.min(1, dt * 12);
     const after = toWorld(mouse.x, mouse.y);
     cam.x += before.x - after.x; cam.y += before.y - after.y;
-    // with a pad the reticle is the screen centre, so let the centre reach the map edge
-    const padMode = lastInput === 'pad';
-    const hw = padMode ? 0 : canvas.width / 2 / cam.zoom, hh = padMode ? 0 : canvas.height / 2 / cam.zoom;
+    const hw = canvas.width / 2 / cam.zoom, hh = canvas.height / 2 / cam.zoom;
     cam.x = hw * 2 >= world.map.W ? world.map.W / 2 : P.clamp(cam.x, hw, world.map.W - hw);
     cam.y = hh * 2 >= world.map.H ? world.map.H / 2 : P.clamp(cam.y, hh, world.map.H - hh);
 
@@ -1121,5 +1153,5 @@
   requestAnimationFrame(frame);
 
   // test hook (used by the smoke test; harmless in game)
-  P.debug = { get world() { return world; }, get selBloc() { return selBloc; }, get tut() { return tut; }, startTutorial, get padSnap() { return padSnap; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
+  P.debug = { get world() { return world; }, get reticle() { return toWorld(padCur.x, padCur.y); }, get selBloc() { return selBloc; }, get tut() { return tut; }, startTutorial, get padSnap() { return padSnap; }, pad, get lastInput() { return lastInput; }, get padFocus() { return padFocus; }, get screen() { return current; }, get tool() { return tool; }, get selSquad() { return selSquad; }, start: (i) => start(P.LEVELS[i]), cam, primary, pickTool, setPaused: (v) => { paused = v; }, R };
 })();

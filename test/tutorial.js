@@ -29,7 +29,7 @@ async function run(side, dev) {
   const steerTo = async (x, y, track) => {
     for (let k = 0; k < 120; k++) {
       if (track) { const tt = await ev(() => PAVE.debug.tut.target()); if (tt) { x = tt.x; y = tt.y; } }
-      const o = await ev(([x, y]) => { const c = PAVE.debug.cam; return { dx: (x - c.x) * c.zoom, dy: (y - c.y) * c.zoom }; }, [x, y]);
+      const o = await ev(([x, y]) => { const c = PAVE.debug.cam, r = PAVE.debug.reticle; return { dx: (x - r.x) * c.zoom, dy: (y - r.y) * c.zoom }; }, [x, y]);
       const d = Math.hypot(o.dx, o.dy);
       if (d < 6) break;
       const m = Math.min(1, Math.max(0.28, d / 260));
