@@ -66,6 +66,11 @@
       const near = this.spawnEntries.filter((e) => Math.hypot(e.x - far.x, e.y - far.y) < 95);
       if (near.length) this.spawnEntries = near;
       this.rally = map.nearestOpen(far.x + (map.W / 2 - far.x) * 0.22, far.y + (map.H / 2 - far.y) * 0.22, 20) || far;
+      if (level.rallyNear) {
+        // tutorial: start a short walk from the first square, on the far side's approach
+        const lm = map.landmarks[0], dx = far.x - lm.x, dy = far.y - lm.y, d = Math.hypot(dx, dy) || 1;
+        this.rally = map.nearestOpen(lm.x + dx / d * level.rallyNear, lm.y + dy / d * level.rallyNear, 20) || this.rally;
+      }
     }
 
     // blocs (protest columns), each with its own goal field
@@ -270,7 +275,7 @@
         // start already marching: scatter along the bloc field near entries/plazas
         const bl = this.blocs[i % this.blocs.length];
         const r = 6 + this.rng() * 26, a = this.rng() * 6.283;
-        const src = this.spawnEntries[(i + bl.id) % this.spawnEntries.length];
+        const src = this.level.rallyNear && this.rally ? this.rally : this.spawnEntries[(i + bl.id) % this.spawnEntries.length];
         x = src.x + Math.cos(a) * r; y = src.y + Math.sin(a) * r;
       } else {
         x += (this.rng() - 0.5) * 6; y += (this.rng() - 0.5) * 6;

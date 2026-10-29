@@ -133,6 +133,13 @@
     <button data-go="back" class="back">← BACK</button>
   </div>
 
+  <div id="controlsMenu" class="screen hidden">
+    <h2>CONTROLS</h2>
+    <div class="row"><button id="ctlMk">🖱 MOUSE &amp; KEYBOARD</button><button id="ctlPad">🎮 CONTROLLER</button></div>
+    <div id="ctlBody" class="ctlGrid"></div>
+    <button data-go="back" class="back">← BACK</button>
+  </div>
+
   <div id="creditsMenu" class="screen hidden">
     <h2>CREDITS</h2>
     <div class="howto"><p>PAVÉ is a work of fiction: a crowd-physics strategy game set in a procedurally generated Paris.<br>Design, code, procedural art &amp; procedural audio — the PAVÉ team.<br>Built with plain JavaScript and Canvas. No sample files: every sound is synthesised.</p></div>
@@ -157,6 +164,7 @@
         <button id="psResume" class="big">RESUME</button>
         <button id="psRestart">RESTART</button>
         <button data-go="settings">SETTINGS</button>
+        <button data-go="controls">CONTROLS</button>
         <button data-go="howto">HOW TO PLAY</button>
         <button id="psSkipTut" class="hidden">SKIP TUTORIAL</button>
         <button id="psQuit">QUIT TO MENU</button>

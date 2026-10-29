@@ -61,13 +61,14 @@
   resize();
 
   // ------------------------------------------------------------ screens
-  const screens = ['mainMenu', 'tutorialMenu', 'campaignMenu', 'sandboxMenu', 'settingsMenu', 'howtoMenu', 'creditsMenu', 'briefing', 'pauseMenu', 'endScreen', 'loading'];
+  const screens = ['mainMenu', 'controlsMenu', 'tutorialMenu', 'campaignMenu', 'sandboxMenu', 'settingsMenu', 'howtoMenu', 'creditsMenu', 'briefing', 'pauseMenu', 'endScreen', 'loading'];
   let current = 'mainMenu';
   function show(id) {
-    if (id !== current && ['settingsMenu', 'howtoMenu'].includes(id)) prevScreen = current;
+    if (id !== current && ['settingsMenu', 'howtoMenu', 'controlsMenu'].includes(id)) prevScreen = current;
     for (const s of screens) $(s).classList.toggle('hidden', s !== id);
     current = id;
     if (id === 'campaignMenu') buildLevelGrid();
+    if (id === 'controlsMenu') buildControls(lastInput === 'pad' ? 'pad' : 'mk');
     if (id === 'mainMenu' || id === 'tutorialMenu') refreshTutorialBadges();
     if (id === 'settingsMenu') loadSettingsUI();
   }
@@ -86,6 +87,7 @@
     else if (go === 'sandbox') show('sandboxMenu');
     else if (go === 'settings') show('settingsMenu');
     else if (go === 'howto') show('howtoMenu');
+    else if (go === 'controls') show('controlsMenu');
     else if (go === 'credits') show('creditsMenu');
     else if (go === 'back') show(prevScreen || 'mainMenu');
     else if (go === 'quit') { if (globalThis.steam && globalThis.steam.quit) globalThis.steam.quit(); else window.close(); }
@@ -127,6 +129,28 @@
     start(P.sandboxLevel({ side: $('sbSide').value, pop: +$('sbPop').value, size: +$('sbSize').value,
       squads: +$('sbSq').value, night: $('sbNight').value === '1', seed: +$('sbSeed').value || 1, style: $('sbStyle').value }), true);
   };
+
+  // controls card: every binding, for the device you're using (switchable)
+  const K_ = (k) => '<kbd>' + k + '</kbd>', B_ = (b) => '<span class="padbtn pb-' + b.toLowerCase() + '">' + b + '</span>';
+  const CONTROLS = {
+    mk: {
+      'Camera': [['Move', K_('W') + K_('A') + K_('S') + K_('D') + ' / arrows / middle-drag'], ['Zoom', 'mouse wheel'], ['Jump', 'click the minimap'], ['Pause', K_('Esc')], ['Speed 1×/2×/3×', K_('Tab')]],
+      '✊ Protest': [['March the selected bloc', 'left-click (tool ' + K_('1') + ')'], ['Next bloc', K_('Q')], ['Casseurs', K_('2') + ' then click the crowd'], ['Fireworks', K_('3') + ' then click police'], ['Barricade', K_('4') + ' then drag across a street'], ['Mobilise', K_('5')], ['Pin a fire truck', 'March onto it'], ['Pan', 'right-drag']],
+      '🛡 Police': [['Select a squad', 'left-click it, or ' + K_('1') + '–' + K_('9') + ' / ' + K_('Q')], ['Form a line', 'right-click a street'], ['Charge', K_('C') + ' then click'], ['Gas', K_('G') + ' then click'], ['Barrier', K_('B') + ' then drag'], ['Pompiers', K_('F') + ' then click a fire'], ['Reinforce', K_('R')]],
+    },
+    pad: {
+      'Camera': [['Move', 'left stick (cursor stays centred)'], ['Zoom', 'right stick up/down, ' + B_('LT') + ' / ' + B_('RT')], ['Hot spot', 'D-pad down'], ['Pause', B_('Start')], ['Speed 1×/2×/3×', B_('Back')]],
+      '✊ Protest': [['Use the tool', B_('A') + ' (cursor snaps to squares, police, trucks)'], ['Change tool', B_('LB') + ' / ' + B_('RB')], ['Cancel / back to March', B_('B')], ['Next bloc', B_('Y') + ' (jumps there)'], ['Go to bloc', B_('X')], ['Barricade', 'hold ' + B_('A') + ', move, release'], ['Mobilise', 'D-pad up']],
+      '🛡 Police': [['Select squad / place its line', B_('A')], ['Change tool', B_('LB') + ' / ' + B_('RB')], ['Cancel / back to Line', B_('B')], ['Next squad', B_('Y') + ' (jumps there)'], ['Go to squad', B_('X')], ['Barrier', 'hold ' + B_('A') + ', move, release'], ['Reinforce', 'D-pad up']],
+    },
+  };
+  function buildControls(dev) {
+    $('ctlMk').classList.toggle('big', dev === 'mk'); $('ctlPad').classList.toggle('big', dev === 'pad');
+    $('ctlBody').innerHTML = Object.entries(CONTROLS[dev]).map(([h, rows]) =>
+      '<div><h3>' + h + '</h3>' + rows.map(([a, b]) => '<div class="ctlRow"><span>' + a + '</span><span>' + b + '</span></div>').join('') + '</div>').join('');
+  }
+  $('ctlMk').onclick = () => buildControls('mk');
+  $('ctlPad').onclick = () => buildControls('pad');
 
   function loadSettingsUI() {
     $('setVol').value = settings.vol; $('setCrowd').value = String(settings.crowd);
@@ -192,6 +216,7 @@
   const tutApi = {
     get world() { return world; }, get lastInput() { return lastInput; }, get tool() { return tool; },
     get selSquad() { return selSquad; }, setSelSquad(i) { selSquad = i; }, pickTool: (id) => pickTool(id), cam,
+    get speed() { return speed; }, get selBloc() { return selBloc; }, setSelBloc(i) { selBloc = i; },
     el: $('tutorial'),
     onDone(side) {
       progress.tut[side] = true; saveProgress();
@@ -343,7 +368,9 @@
       case 'march': {
         if (!map.nearestOpen(wx, wy, 10)) return tip('Can\'t march into a building');
         let lmId = null;
-        for (const lm of map.landmarks) if (Math.hypot(lm.x - wx, lm.y - wy) < lm.r + 3) { lmId = lm.id; wx = lm.x; wy = lm.y; }
+        // clicking a fire truck aims the bloc at the truck itself (to pin it), not the square it is on
+        const onTruck = world.trucks.some((tr) => tr.state !== 'abandoned' && Math.hypot(tr.x - wx, tr.y - wy) < 5);
+        if (!onTruck) for (const lm of map.landmarks) if (Math.hypot(lm.x - wx, lm.y - wy) < lm.r + 3) { lmId = lm.id; wx = lm.x; wy = lm.y; }
         world.setBlocTarget(selBloc, wx, wy, lmId);
         audio.play('order');
         const name = lmId != null ? map.landmarks[lmId].name : map.streetAt(wx, wy);
@@ -612,7 +639,7 @@
       if (tool === 'march') for (const lm of world.map.landmarks) consider(lm.x, lm.y, 'landmark', lm);
       if (tool === 'march' || tool === 'casseurs') for (const tr of world.trucks) if (tr.state !== 'abandoned') consider(tr.x, tr.y, 'truck', tr);
       if (tool === 'fireworks') world.squads.forEach((sq, i) => consider(sq.mx != null ? sq.mx : sq.ax, sq.my != null ? sq.my : sq.ay, 'squad', i));
-      if (tool === 'casseurs') world.blocs.forEach((b) => { if (b.n > 50) consider(b.cx, b.cy, 'bloc', b); });
+      if (tool === 'casseurs') { const h = P.densAround(world, world.densP, wx, wy, 3); if (h.max >= 6) consider(h.x, h.y, 'bloc', null); }
     }
     return best;
   }

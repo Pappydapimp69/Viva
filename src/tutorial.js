@@ -35,74 +35,156 @@
     },
   };
 
+  const near = (t, x, y, r) => t.w.map.nearestOpen(x, y, r || 12) || { x, y };
+  const sqPos = (sq) => ({ x: sq.mx != null ? sq.mx : sq.ax, y: sq.my != null ? sq.my : sq.ay });
+  // where the bloc's people actually are: the densest crowd near the first square
+  // (a bloc's average position can sit in an empty street between two halves of it)
+  const crowdSpot = (t) => {
+    const lm = t.w.map.landmarks[0], b = t.w.blocs[0];
+    let best = P.densAround(t.w, t.w.densP, lm.x, lm.y, 10);
+    if (best.max < 4) best = P.densAround(t.w, t.w.densP, b.cx, b.cy, 12);
+    const o = t.w.map.nearestOpen(best.x, best.y, 6) || best;
+    return { x: o.x, y: o.y };
+  };
+  // bring a squad next to the bloc (for the gas and fireworks lessons)
+  const squadToBloc = (t) => {
+    const c = crowdSpot(t), sq = t.w.squads[0], lm1 = t.w.map.landmarks[1] || t.w.map.landmarks[0];
+    const dx = lm1.x - c.x, dy = lm1.y - c.y, d = Math.hypot(dx, dy) || 1;
+    const o = near(t, c.x + dx / d * 20, c.y + dy / d * 20);
+    t.w.orderSquad(sq, o.x, o.y, false, true);
+    // walk them there instantly so the lesson doesn't wait on it
+    const cr = t.w.crowd;
+    for (let i = 0; i < cr.n; i++) if (cr.kind[i] === K.POL && cr.grp[i] === sq.id) { const s2 = cr.slot[i]; if (s2 < sq.slotX.length) { cr.x[i] = sq.slotX[s2]; cr.y[i] = sq.slotY[s2]; } }
+    return sq;
+  };
+  const SPEED = {
+    title: 'Speed up time',
+    mk: 'Walking takes a while. Press ' + kb('Tab') + ' to speed time up (2×, then 3×; once more goes back to normal).',
+    pad: 'Walking takes a while. Press ' + btn('Back') + ' to speed time up (2×, then 3×; once more goes back to normal).',
+    hi: '#btnSpeed',
+    done: (t) => t.api.speed > 1,
+  };
+
   const PROTEST = [
     COMMON.zoom, COMMON.camera,
     {
       title: 'This is your bloc', info: true,
-      mk: 'All those dots are your people. You never move them one by one: you give the whole <b>bloc</b> a destination and each person finds their own way there, around anything in the way.',
-      pad: 'All those dots are your people. You never move them one by one: you give the whole <b>bloc</b> a destination and each person finds their own way there, around anything in the way.',
+      both: 'All those dots are your people. You don\'t move them one by one: you give the whole <b>bloc</b> a destination and each person finds their own way there.',
       hi: '#blc_0', at: (t) => { const b = t.w.blocs[0]; return b.n ? { x: b.cx, y: b.cy, r: 14 } : null; },
     },
     {
       title: 'March on the square',
-      mk: 'The <b>March</b> tool is selected. <b>Left-click</b> the pulsing ring: Place de la ' + '{lm0}' + '.',
+      mk: 'The <b>March</b> tool is selected. <b>Left-click</b> the pulsing ring: Place de la {lm0}.',
       pad: 'Move until the cursor snaps onto the pulsing ring (Place de la {lm0}) and turns yellow, then press ' + btn('A') + '.',
-      hi: '#tool_march', at: (t) => t.lm0(),
-      setup(t) { t.api.pickTool('march'); },
+      hi: '#tool_march', at: (t) => t.lm(0),
+      setup(t) { t.api.pickTool('march'); t.api.setSelBloc(0); },
       done: (t) => t.w.blocs[0].target === t.w.map.landmarks[0].id,
     },
+    SPEED,
     {
       title: 'Take the square',
-      mk: 'They\'re on their way. When far more of your people than police stand inside the ring, it fills red and the square is yours. Too slow? ' + kb('Tab') + ' speeds time up.',
-      pad: 'They\'re on their way. When far more of your people than police stand inside the ring, it fills red and the square is yours. Too slow? ' + btn('Back') + ' speeds time up.',
-      hi: '#btnSpeed', at: (t) => t.lm0(),
+      both: 'When far more of your people than police stand inside the ring, it fills red. The more people, the faster.',
+      at: (t) => t.lm(0),
+      progress: (t) => Math.round(Math.max(0, t.w.map.landmarks[0].control) * 100) + '%',
       done: (t) => t.w.map.landmarks[0].owner === 'protest',
     },
     {
+      title: 'Bridges are chokepoints', info: true,
+      both: 'Over the river, everyone squeezes across the bridges. The same happens at any narrow street or gap: block one and the whole bloc reroutes to the next.',
+      skip: (t) => !t.bridge(),
+      at: (t) => { const b = t.bridge(); return b ? { x: b.x, y: b.y, r: 8 } : null; },
+    },
+    {
       title: 'Pick a tool',
-      mk: 'Tools cost <b>energy</b> (the yellow bar, top right). It refills on its own. Press ' + kb('2') + ' or click the <b>Casseurs</b> button.',
-      pad: 'Tools cost <b>energy</b> (the yellow bar, top right). It refills on its own. Press ' + btn('LB') + ' / ' + btn('RB') + ' until <b>CASSEURS</b> is selected.',
+      mk: 'Tools cost <b>energy</b> (the yellow bar, top right), which refills by itself. Press ' + kb('2') + ' or click the <b>Casseurs</b> button.',
+      pad: 'Tools cost <b>energy</b> (the yellow bar, top right), which refills by itself. Press ' + btn('LB') + ' / ' + btn('RB') + ' until <b>CASSEURS</b> is selected.',
       hi: '#tool_casseurs',
       setup(t) { t.w.energy = Math.max(t.w.energy, 60); },
       done: (t) => t.api.tool === 'casseurs',
     },
     {
       title: 'Radicalise',
-      mk: '<b>Left-click</b> inside your crowd. About 20 people pull their hoods up: they\'re <b>casseurs</b> now.',
-      pad: 'Point at your crowd (the cursor snaps to the bloc) and press ' + btn('A') + '. About 20 people pull their hoods up: they\'re <b>casseurs</b> now.',
-      at: (t) => { const b = t.w.blocs[0]; return { x: b.cx, y: b.cy, r: 10 }; },
+      mk: '<b>Left-click</b> inside your crowd. About 20 people pull their hoods up: they\'re <b>casseurs</b> now, and they go for parked cars.',
+      pad: 'Point at your crowd (the cursor snaps to the bloc) and press ' + btn('A') + '. About 20 people pull their hoods up: they\'re <b>casseurs</b> now, and they go for parked cars.',
+      setup(t) { t.s.spot = crowdSpot(t); },
+      at: (t) => ({ x: t.s.spot.x, y: t.s.spot.y, r: 8 }),
       ev: (e) => e.type === 'casseurs',
     },
     {
       title: 'Fire spreads',
-      mk: 'Casseurs head for parked cars and set them alight, and flames jump to the next car with the wind. Wait for the first one (' + kb('Tab') + ' to speed up).',
-      pad: 'Casseurs head for parked cars and set them alight, and flames jump to the next car with the wind. Wait for the first one (' + btn('Back') + ' to speed up).',
+      both: 'Wait for the first car to catch. Flames jump to the next car with the wind.',
       hi: '#carsBadge',
       setup(t) { t.s.b0 = t.w.stats.burned; },
       done: (t) => t.w.stats.burned > t.s.b0,
     },
     {
-      title: 'Fireworks vs shields',
-      mk: 'Press ' + kb('3') + ' for <b>Fireworks</b>, then <b>left-click</b> the marked police squad. Hit officers are stunned for a few seconds.',
-      pad: 'Press ' + btn('RB') + ' until <b>FIREWORKS</b>, aim at the marked police squad (the cursor snaps) and press ' + btn('A') + '.',
-      hi: '#tool_fireworks',
+      title: 'Pin a fire truck',
+      mk: 'A fire truck is coming for that fire. Press ' + kb('1') + ' for <b>March</b> and <b>left-click the truck</b>: your bloc packs round it. Pinned for a few seconds, the crew walks away and it stops spraying.',
+      pad: 'A fire truck is coming for that fire. Press ' + btn('B') + ' for <b>March</b>, move onto the truck (the cursor snaps to it) and press ' + btn('A') + ': your bloc packs round it. Pinned for a few seconds, the crew walks away.',
       setup(t) {
-        // bring one squad close enough to the crowd to be in range
-        const b = t.w.blocs[0], sq = t.w.squads[0], lm1 = t.w.map.landmarks[1] || t.w.map.landmarks[0];
-        const dx = lm1.x - b.cx, dy = lm1.y - b.cy, d = Math.hypot(dx, dy) || 1;
-        t.w.orderSquad(sq, b.cx + dx / d * 22, b.cy + dy / d * 22, false, true);
-        t.w.energy = Math.max(t.w.energy, 40);
+        const w = t.w, b = crowdSpot(t), m = w.map;
+        let car = null, bd = Infinity;
+        for (const c of m.cars) if (c.state === 1) { const d = Math.hypot(c.cx - b.x, c.cy - b.y); if (d < bd) { bd = d; car = c; } }
+        if (!car || bd > 40) { car = null; bd = Infinity; for (const c of m.cars) if (c.state === 0) { const d = Math.hypot(c.cx - b.x, c.cy - b.y); if (d < bd) { bd = d; car = c; } } if (car) w.ignite(car.id, 'tutorial'); }
+        if (!car) return;
+        // a truck arrives from a road a little way off
+        const f = new P.Field(m, { roadOnly: true });
+        f.compute(P.discSources(m, car.cx, car.cy, 4));
+        let best = null, bv = Infinity;
+        for (let r = 10; r < 30 && !best; r += 2) for (let a = 0; a < 6.28; a += 0.3) {
+          const x = car.cx + Math.cos(a) * r, y = car.cy + Math.sin(a) * r, k = (y | 0) * m.W + (x | 0);
+          if (x < 0 || y < 0 || x >= m.W || y >= m.H || m.solid[k] || m.tile[k] !== P.T.ROAD) continue;
+          const d = f.dist[k]; if (d < bv) { bv = d; best = { x: (x | 0) + 0.5, y: (y | 0) + 0.5 }; }
+        }
+        if (!best) return;
+        w.trucks.push({ x: best.x, y: best.y, a: 0, field: f, state: 'go', car: car.id, spray: 0 });
+        w.trucksOut++;
+        t.s.truck = w.trucks[w.trucks.length - 1];
+        w.energy = Math.max(w.energy, 30);
       },
-      at: (t) => { const sq = t.w.squads[0]; return { x: sq.mx != null ? sq.mx : sq.ax, y: sq.my != null ? sq.my : sq.ay, r: 6 }; },
-      ev: (e, t) => { const sq = t.w.squads[0]; return e.type === 'fireworks' && Math.min(Math.hypot(e.x - sq.ax, e.y - sq.ay), Math.hypot(e.x - (sq.mx || sq.ax), e.y - (sq.my || sq.ay))) < 14; },
+      skip: (t) => !t.s.truck,
+      at: (t) => t.s.truck && t.s.truck.state !== 'abandoned' ? { x: t.s.truck.x, y: t.s.truck.y, r: 6 } : null,
+      ev: (e) => e.type === 'truckAbandoned',
+    },
+    {
+      title: 'Tear gas!',
+      both: 'The police just gassed your bloc. People in the cloud panic and run, and some give up and go home: watch CROWD drop. <b>Get them out</b>: march the bloc somewhere else.',
+      hi: '#topRight .resRow',
+      setup(t) {
+        const sq = squadToBloc(t), c = crowdSpot(t);
+        t.s.gas = { x: c.x, y: c.y };
+        t.w.throwGas(sq.ax, sq.ay, c.x, c.y);
+        t.w.throwGas(sq.ax, sq.ay, c.x + 4, c.y - 3);
+        t.api.pickTool('march');
+      },
+      at: (t) => ({ x: t.s.gas.x, y: t.s.gas.y, r: 9 }),
+      done: (t) => t.t > 2 && Math.hypot(t.w.blocs[0].tx - t.s.gas.x, t.w.blocs[0].ty - t.s.gas.y) > 20,
+    },
+    {
+      title: 'Fireworks vs shields',
+      mk: 'Payback. Press ' + kb('3') + ' for <b>Fireworks</b> and <b>left-click</b> the marked squad. Officers in the blast are stunned and hurt; hit the same squad again and the injured are carried off.',
+      pad: 'Payback. Press ' + btn('RB') + ' until <b>FIREWORKS</b>, aim at the marked squad (the cursor snaps) and press ' + btn('A') + '. Officers in the blast are stunned and hurt; hit the same squad again and the injured are carried off.',
+      hi: '#tool_fireworks',
+      setup(t) { t.w.energy = Math.max(t.w.energy, 40); },
+      at: (t) => { const p = sqPos(t.w.squads[0]); return { x: p.x, y: p.y, r: 6 }; },
+      ev: (e, t) => { const sq = t.w.squads[0], p = sqPos(sq); return e.type === 'fireworks' && Math.min(Math.hypot(e.x - sq.ax, e.y - sq.ay), Math.hypot(e.x - p.x, e.y - p.y)) < 14; },
     },
     {
       title: 'Build a barricade',
-      mk: 'Press ' + kb('4') + ' for <b>Barricade</b>, then <b>click and drag</b> across a street near your people. Your people walk straight through it; police have to beat it down.',
+      mk: 'Press ' + kb('4') + ' for <b>Barricade</b>, then <b>click and drag</b> across a street near your people. Your people walk through it; police have to beat it down.',
       pad: 'Press ' + btn('RB') + ' until <b>BARRICADE</b>. <b>Hold</b> ' + btn('A') + ', move across a street near your people, then <b>release</b>. Your people walk through it; police have to beat it down.',
       hi: '#tool_barricade',
       setup(t) { t.w.energy = Math.max(t.w.energy, 40); },
       ev: (e) => e.type === 'barricade' && e.kind === 1,
+    },
+    {
+      title: 'Your second bloc',
+      mk: 'You have two blocs. Press ' + kb('Q') + ' (or click <b>B</b> on the left) to select bloc B, then <b>left-click</b> Place de la {lm1}.',
+      pad: 'You have two blocs. Press ' + btn('Y') + ' to select bloc B and jump to it, then move onto Place de la {lm1} and press ' + btn('A') + '.',
+      hi: '#blc_1',
+      setup(t) { t.api.pickTool('march'); t.api.setSelBloc(0); },
+      at: (t) => t.lm(1),
+      done: (t) => t.w.blocs[1] && t.w.blocs[1].target === t.w.map.landmarks[1].id,
     },
     {
       title: 'Call for backup',
@@ -113,10 +195,28 @@
       ev: (e) => e.type === 'mobilise',
     },
     {
-      title: 'Crowd and energy', info: true,
-      mk: '<b>CROWD</b> (orange) is how many people your movement draws: taking squares and burning cars grow it, tear gas and arrests shrink it, and the line under it says why. If it collapses, you lose. <b>ENERGY</b> (yellow) is just what tools cost: it refills by itself, and spending it never costs you people. Switch blocs with ' + kb('Q') + '.',
-      pad: '<b>CROWD</b> (orange) is how many people your movement draws: taking squares and burning cars grow it, tear gas and arrests shrink it, and the line under it says why. If it collapses, you lose. <b>ENERGY</b> (yellow) is just what tools cost: it refills by itself, and spending it never costs you people. Switch blocs with ' + btn('Y') + '.',
-      hi: '#topRight',
+      title: 'CROWD', info: true,
+      both: '<b>CROWD</b> (orange) is how many people your movement draws. Squares and fires grow it; gas and arrests shrink it; the line under it says why. If it collapses, you lose.',
+      hi: '#topRight .resRow',
+    },
+    {
+      title: 'ENERGY', info: true,
+      both: '<b>ENERGY</b> (yellow) is only what tools cost. It refills by itself, and spending it never costs you people.',
+      hi: '#energyRow',
+    },
+    {
+      title: 'Final test',
+      both: 'The police now defend Place de la {lm2}. Take it however you like: both blocs, fireworks on the lines, barricades behind you.',
+      setup(t) {
+        const w = t.w, lm = w.map.landmarks[2] || w.map.landmarks[1];
+        t.s.lm = lm;
+        w.level.aiPassive = false;
+        w.squads.forEach((sq) => { sq.home = lm.id; });
+        w.energy = Math.max(w.energy, 80);
+      },
+      at: (t) => ({ x: t.s.lm.x, y: t.s.lm.y, r: t.s.lm.r }),
+      progress: (t) => Math.round(Math.max(0, t.s.lm.control) * 100) + '%',
+      done: (t) => t.s.lm.owner === 'protest',
     },
   ];
 
@@ -128,7 +228,7 @@
       pad: 'The blue lines are your CRS companies. Move onto the marked squad, <b>{sq1}</b> (the cursor snaps to it), and press ' + btn('A') + '.',
       hi: '#sq_1',
       setup(t) { t.api.pickTool('move'); if (t.api.selSquad === 1) t.api.setSelSquad(0); },
-      at: (t) => { const sq = t.w.squads[1]; return { x: sq.mx != null ? sq.mx : sq.ax, y: sq.my != null ? sq.my : sq.ay, r: 6 }; },
+      at: (t) => { const p = sqPos(t.w.squads[1]); return { x: p.x, y: p.y, r: 6 }; },
       done: (t) => t.api.selSquad === 1,
     },
     {
@@ -139,16 +239,25 @@
         // a street point between the target square and the nearest crowd
         const lm = t.w.map.landmarks[0], b = t.w.nearestBloc(lm.x, lm.y) || { cx: t.w.map.W / 2, cy: t.w.map.H / 2 };
         const dx = b.cx - lm.x, dy = b.cy - lm.y, d = Math.hypot(dx, dy) || 1;
-        const o = t.w.map.nearestOpen(lm.x + dx / d * (lm.r + 12), lm.y + dy / d * (lm.r + 12), 12) || lm;
+        const o = near(t, lm.x + dx / d * (lm.r + 12), lm.y + dy / d * (lm.r + 12));
         t.s.target = { x: o.x, y: o.y };
       },
       at: (t) => ({ x: t.s.target.x, y: t.s.target.y, r: 5 }),
       done: (t) => { const sq = t.w.squads[1]; return Math.hypot(sq.ax - t.s.target.x, sq.ay - t.s.target.y) < 10; },
     },
     {
+      title: 'Switch squads',
+      mk: 'Press ' + kb('Q') + ' to step to the next squad (or a number key ' + kb('1') + '–' + kb('9') + '; press it twice to jump the camera there).',
+      pad: 'Press ' + btn('Y') + ' to select the next squad and jump the camera to it. ' + btn('X') + ' jumps back to the one you have selected.',
+      hi: '#squadBar',
+      setup(t) { t.s.sel0 = t.api.selSquad; },
+      done: (t) => t.api.selSquad !== t.s.sel0,
+    },
+    SPEED,
+    {
       title: 'Tear gas',
-      mk: 'Press ' + kb('G') + ' for <b>Gas</b>, then <b>left-click</b> the crowd in front of your line. The selected squad throws it, so stay within 40 m.',
-      pad: 'Press ' + btn('RB') + ' until <b>GAS</b>, aim at the crowd in front of your line and press ' + btn('A') + '. The selected squad throws it, so stay within 40 m.',
+      mk: 'Press ' + kb('G') + ' for <b>Gas</b>, then <b>left-click</b> the crowd in front of a line. The selected squad throws it, so stay within 40 m. People in the cloud panic and some go home.',
+      pad: 'Press ' + btn('RB') + ' until <b>GAS</b>, aim at the crowd in front of a line and press ' + btn('A') + '. The selected squad throws it, so stay within 40 m. People in the cloud panic and some go home.',
       hi: '#tool_gas',
       setup(t) { t.w.authority = Math.max(t.w.authority, 60); },
       ev: (e) => e.type === 'gas',
@@ -182,16 +291,16 @@
     },
     {
       title: 'Close a street',
-      mk: 'Press ' + kb('B') + ' for <b>Barrier</b>, then <b>click and drag</b> across a street. The crowd will look for another way round.',
-      pad: 'Press ' + btn('RB') + ' until <b>BARRIER</b>. <b>Hold</b> ' + btn('A') + ', move across a street, then <b>release</b>.',
+      mk: 'Press ' + kb('B') + ' for <b>Barrier</b>, then <b>click and drag</b> across a street. The crowd can\'t pass: it reroutes to the next street.',
+      pad: 'Press ' + btn('RB') + ' until <b>BARRIER</b>. <b>Hold</b> ' + btn('A') + ', move across a street, then <b>release</b>. The crowd can\'t pass: it reroutes to the next street.',
       hi: '#tool_barrier',
       setup(t) { t.w.authority = Math.max(t.w.authority, 60); },
       ev: (e) => e.type === 'barricade' && e.kind === 2,
     },
     {
       title: 'Call the pompiers',
-      mk: 'A car is on fire (marked). Press ' + kb('F') + ' for <b>Pompiers</b> and <b>left-click</b> the fire. A truck drives out through the crowd.',
-      pad: 'A car is on fire (marked). Press ' + btn('RB') + ' until <b>POMPIERS</b>, aim at the fire (the cursor snaps) and press ' + btn('A') + '.',
+      mk: 'A car is on fire (marked). Press ' + kb('F') + ' for <b>Pompiers</b> and <b>left-click</b> the fire. If the crowd packs round a truck, its crew abandons it: clear them with a charge.',
+      pad: 'A car is on fire (marked). Press ' + btn('RB') + ' until <b>POMPIERS</b>, aim at the fire (the cursor snaps) and press ' + btn('A') + '. If the crowd packs round a truck, its crew abandons it: clear them with a charge.',
       hi: '#tool_truck',
       setup(t) {
         t.w.authority = Math.max(t.w.authority, 60);
@@ -212,9 +321,22 @@
     },
     {
       title: 'Authority', info: true,
-      mk: 'Everything costs <b>authority</b> (the blue bar); it refills slowly. Step through squads with the number keys or ' + kb('Q') + '. In the campaign you hold squares, stop the fires and arrest casseurs without running dry.',
-      pad: 'Everything costs <b>authority</b> (the blue bar); it refills slowly. Step through squads with ' + btn('Y') + ' and jump to one with ' + btn('X') + '. In the campaign you hold squares, stop the fires and arrest casseurs without running dry.',
-      hi: '.resRow',
+      both: 'Every order costs <b>authority</b> (the blue bar). It refills slowly, so don\'t spend it all at once.',
+      hi: '#topRight .resRow',
+    },
+    {
+      title: 'Final test',
+      both: 'The whole crowd is heading for Place de la {lm0}. Hold it for 45 seconds: lines on the streets in, gas, charges, barriers. Lose it and the clock restarts.',
+      setup(t) {
+        const w = t.w, lm = w.map.landmarks[0];
+        w.blocs.forEach((b) => w.setBlocTarget(b.id, lm.x, lm.y, lm.id));
+        w.authority = Math.max(w.authority, 90);
+        t.s.held = 0;
+      },
+      tick(t) { const lm = t.w.map.landmarks[0]; t.s.held = lm.owner === 'police' ? t.s.held + t.dt : 0; },
+      at: (t) => t.lm(0),
+      progress: (t) => Math.floor(t.s.held) + ' / 45 s',
+      done: (t) => t.s.held >= 45,
     },
   ];
 
@@ -228,19 +350,30 @@
     this.next();
   }
   Object.defineProperty(Tutorial.prototype, 'w', { get() { return this.api.world; } });
-  Tutorial.prototype.lm0 = function () { const lm = this.w.map.landmarks[0]; return { x: lm.x, y: lm.y, r: lm.r }; };
+  Tutorial.prototype.lm0 = function () { return this.lm(0); };
+  Tutorial.prototype.lm = function (i) { const ls = this.w.map.landmarks, lm = ls[i] || ls[0]; return { x: lm.x, y: lm.y, r: lm.r }; };
+  // nearest bridge tile to the bloc (river maps), or null
+  Tutorial.prototype.bridge = function () {
+    if (this.s.bridge !== undefined) return this.s.bridge;
+    const m = this.w.map, b = this.w.blocs[0];
+    let best = null, bd = Infinity;
+    for (let k = 0; k < m.N; k += 2) if (m.tile[k] === P.T.BRIDGE) { const x = k % m.W, y = (k / m.W) | 0, d = (x - b.cx) ** 2 + (y - b.cy) ** 2; if (d < bd) { bd = d; best = { x: x + 0.5, y: y + 0.5 }; } }
+    return (this.s.bridge = best);
+  };
   Tutorial.prototype.step = function () { return this.steps[this.i]; };
   Tutorial.prototype.next = function () {
     this.i++; this.s = {}; this.t = 0;
     if (this.i >= this.steps.length) { this.finished = true; this.api.onDone(this.side); return; }
     const st = this.step();
     if (st.setup) st.setup(this);
+    if (st.skip && st.skip(this)) { this.next(); return; }
     this.render(true);
     if (P.audio) P.audio.play('capture');
   };
   Tutorial.prototype.text = function (html) {
     const w = this.w, sq = w.squads[1];
-    return html.replace(/\{lm0\}/g, w.map.landmarks[0].name).replace(/\{sq1\}/g, sq ? sq.name : 'CRS 8');
+    const L = w.map.landmarks, nm = (i) => (L[i] || L[0]).name;
+    return html.replace(/\{lm0\}/g, nm(0)).replace(/\{lm1\}/g, nm(1)).replace(/\{lm2\}/g, nm(2)).replace(/\{sq1\}/g, sq ? sq.name : 'CRS 8');
   };
   Tutorial.prototype.device = function () { return this.api.lastInput === 'pad' ? 'pad' : 'mk'; };
   Tutorial.prototype.render = function (force) {
@@ -253,7 +386,7 @@
     el.querySelector('.tutStep').textContent = 'STEP ' + (this.i + 1) + ' / ' + this.steps.length;
     el.querySelector('.tutDev').textContent = dev === 'pad' ? '🎮 Controller' : '🖱 Mouse & keyboard';
     el.querySelector('.tutTitle').textContent = st.title;
-    el.querySelector('.tutText').innerHTML = this.text(st[dev]);
+    el.querySelector('.tutText').innerHTML = this.text(st[dev] || st.both);
     const cont = el.querySelector('.tutContinue');
     cont.classList.toggle('hidden', !st.info);
     cont.innerHTML = dev === 'pad' ? 'Continue ' + btn('A') : 'Continue ' + kb('Enter');
@@ -267,8 +400,10 @@
     if (this.finished || !this.w) return;
     const st = this.step();
     this.t += dt;
+    this.dt = dt;
     if (st.tick) st.tick(this);
     this.render(false);
+    if (st.progress) { const pr = st.title + ' — ' + st.progress(this); if (pr !== this.lastPr) { this.lastPr = pr; this.api.el.querySelector('.tutTitle').textContent = pr; } }
     if (st.hi && (!this.hiEl || !this.hiEl.isConnected)) { this.hiEl = document.querySelector(st.hi); if (this.hiEl) this.hiEl.classList.add('tutHi'); }
     if (st.done && this.t > 0.4 && st.done(this)) this.next();
   };

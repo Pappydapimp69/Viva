@@ -45,6 +45,7 @@ async function run(side, dev) {
     await p.mouse.move(s.x + 3, s.y + 3); await p.mouse.move(s.x, s.y); await p.mouse.click(s.x, s.y, { button: button || 'left' }); await sleep(150);
   };
   const target = () => ev(() => PAVE.debug.tut.target());
+  const lmAt = (i) => ev((i) => { const L = PAVE.debug.world.map.landmarks, l = L[i] || L[0]; return { x: l.x, y: l.y }; }, i);
   const act = async (t) => { if (dev === 'pad') { await steerTo(t.x, t.y); await tap(0); } else await clickAt(t.x, t.y); };
   const line = async (a, bb) => {
     if (dev === 'pad') { await steerTo(a.x, a.y); await press(0, true); await sleep(120); await steerTo(bb.x, bb.y); await press(0, false); await sleep(200); return; }
@@ -83,23 +84,58 @@ async function run(side, dev) {
         break;
       }
       case 'Zoom in': if (dev === 'pad') { await press(7, true); await sleep(800); await press(7, false); } else { await p.mouse.move(800, 450); for (let k = 0; k < 6; k++) { await p.mouse.wheel(0, -200); await sleep(60); } } break;
-      case 'This is your bloc': case 'Crowd and energy': case 'Authority': await sleep(450); if (dev === 'pad') await tap(0); else await key('Enter'); break;
+      case 'This is your bloc': case 'Bridges are chokepoints': case 'CROWD': case 'ENERGY': case 'Authority': await sleep(450); if (dev === 'pad') await tap(0); else await key('Enter'); break;
+      case 'Speed up time': if (dev === 'pad') await tap(8); else await key('Tab'); break;
       case 'March on the square': case 'Radicalise': case 'Select a squad': case 'Charge the casseurs': case 'Call the pompiers':
         if (title === 'Charge the casseurs') { if (dev === 'pad') await toolUntil('charge'); else await key('c'); }
         if (title === 'Call the pompiers') { if (dev === 'pad') await toolUntil('truck'); else await key('f'); }
-        if (process.env.TUT_DEBUG && title === 'Charge the casseurs') {
-          const info = await ev((t) => { const c = PAVE.debug.cam, w = PAVE.debug.world; const sx = (t.x - c.x) * c.zoom + 800, sy = (t.y - c.y) * c.zoom + 450;
-            return { t, tool: PAVE.debug.tool, sel: PAVE.debug.selSquad, auth: w.authority, hit: document.elementFromPoint(sx, sy) && document.elementFromPoint(sx, sy).id, sx, sy }; }, t);
-          console.log('DEBUG before', JSON.stringify(info));
-        }
         await act(t);
-        if (process.env.TUT_DEBUG && title === 'Charge the casseurs') console.log('DEBUG after', JSON.stringify(await ev(() => ({ tip: document.getElementById('tip').textContent, ch: PAVE.debug.world.squads.map((q) => q.charge) }))));
+        if (process.env.TUT_DEBUG) console.log('DEBUG', title, JSON.stringify(await ev((t) => { const c = PAVE.debug.cam, w = PAVE.debug.world; const sx = (t.x - c.x) * c.zoom + 800, sy = (t.y - c.y) * c.zoom + 450, el = document.elementFromPoint(sx, sy);
+          let near = 0; for (let i = 0; i < w.crowd.n; i++) if (w.crowd.kind[i] === 0 && (w.crowd.x[i] - t.x) ** 2 + (w.crowd.y[i] - t.y) ** 2 < 64) near++;
+          return { t, tool: PAVE.debug.tool, sx: sx | 0, sy: sy | 0, el: el && (el.id || el.className), near, tip: document.getElementById('tip').textContent, energy: w.energy | 0 }; }, t)));
         break;
-      case 'Take the square': case 'Fire spreads':
-        if (dev === 'pad') { await tap(8); await tap(8); } else { await key('Tab'); await key('Tab'); }
+      case 'Take the square': case 'Fire spreads': {
+        // speed is 2x from the speed step: go to 3x while waiting, then back to 1x
+        if (dev === 'pad') await tap(8); else await key('Tab');
         await waitStepChange(title, 150000);
         if (dev === 'pad') await tap(8); else await key('Tab');
         break;
+      }
+      case 'Pin a fire truck': {
+        if (dev === 'pad') await tap(1); else await key('1');
+        const tr = await target();
+        if (tr) await act(tr);
+        await waitStepChange(title, 60000);
+        break;
+      }
+      case 'Tear gas!': {
+        if (dev === 'pad') await tap(1); else await key('1');
+        await act(await lmAt(2));
+        break;
+      }
+      case 'Your second bloc': {
+        if (dev === 'pad') await tap(3); else await key('q');
+        await act(await lmAt(1));
+        break;
+      }
+      case 'Switch squads': if (dev === 'pad') await tap(3); else await key('q'); break;
+      case 'Final test': {
+        if (side === 'protest') {
+          // bloc B (selected) joins bloc A on the defended square
+          await act(await lmAt(2));
+        } else {
+          // every squad onto the square, spread round its centre
+          const n = await ev(() => PAVE.debug.world.squads.length), L = await lmAt(0);
+          for (let q = 0; q < n; q++) {
+            if (dev === 'pad') await tap(3); else await key('q');
+            const a = q * 2.1, pt = { x: L.x + Math.cos(a) * 6, y: L.y + Math.sin(a) * 6 };
+            if (dev === 'pad') await act(pt); else await clickAt(pt.x, pt.y, 'right');
+          }
+        }
+        if (dev === 'pad') { await tap(8); await tap(8); } else { await key('Tab'); await key('Tab'); }
+        await waitStepChange(title, 300000);
+        break;
+      }
       case 'Pick a tool': if (dev === 'pad') await toolUntil('casseurs'); else await key('2'); break;
       case 'Fireworks vs shields': if (dev === 'pad') await toolUntil('fireworks'); else await key('3'); await act(t); break;
       case 'Form a line': if (dev === 'pad') await act(t); else await clickAt(t.x, t.y, 'right'); break;

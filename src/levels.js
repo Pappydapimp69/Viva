@@ -67,8 +67,8 @@
   // Two short practice levels: calm police / calm crowd, no way to lose.
   P.TUTORIALS = {
     protest: {
-      id: 'tut-protest', tutorial: 'protest', name: 'Tutorial — Protest', side: S.PROTEST, seed: 5, w: 224, h: 224, style: 'haussmann',
-      pop: 5000, squads: 2, squadSize: 32, trucks: 1, time: 3600, cassFrac: 0.002, blocs: 1, landmarks: 3, captureMul: 3,
+      id: 'tut-protest', tutorial: 'protest', name: 'Tutorial — Protest', side: S.PROTEST, seed: 5, w: 224, h: 224, style: 'river',
+      pop: 5000, squads: 2, squadSize: 32, trucks: 1, time: 3600, cassFrac: 0.002, blocs: 2, landmarks: 3, captureMul: 3, rallyNear: 45,
       aiPassive: true, names: ['République', 'Bastille', 'Nation'], startFrac: 0.7, momentum: 60,
       caption: ['TUTORIAL', 'PROTEST'], brief: 'Learn to lead the crowd, one step at a time.',
       objectives: [{ type: 'survive', label: 'Follow the steps' }], chat: ['rdv 14h répu 🔥'],
