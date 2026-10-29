@@ -569,6 +569,7 @@
       el.offsetParent !== null && !el.classList.contains('hidden') && !el.classList.contains('locked') && !el.disabled);
   }
   function setFocus(el) {
+    if (window.__fl) window.__fl.push([el && (el.id || el.textContent.trim().slice(0, 12)), (new Error().stack.split('\n')[2] || '').trim().slice(0, 60), (pad.nav || '-'), pad.lx.toFixed(2)]);
     if (padFocus) padFocus.classList.remove('padFocus');
     padFocus = el;
     if (el) { el.classList.add('padFocus'); el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'nearest' }); }

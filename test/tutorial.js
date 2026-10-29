@@ -11,7 +11,7 @@ async function run(side, dev) {
   await p.addInitScript(() => {
     const pad = { id: 'Fake Pad (STANDARD GAMEPAD)', connected: true, mapping: 'standard',
       buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };
-    window.__pad = pad; window.__padOn = false;
+    window.__pad = pad; window.__padOn = false; window.__fl = []; // enable the game's pad focus log
     navigator.getGamepads = () => (window.__padOn ? [pad] : []);
   });
   await p.goto('file://' + path.join(__dirname, '..', 'index.html'));
@@ -172,6 +172,7 @@ async function run(side, dev) {
   if (dev === 'pad') { await sleep(300); await tap(0); } // focus lands on the primary button by itself: one press
   else await p.click('#tutCampaign', { timeout: 4000 }).catch(() => {});
   const toCampaign = await p.waitForFunction(() => PAVE.debug.screen === 'campaignMenu', null, { timeout: 4000 }).then(() => true, () => false);
+  if (!toCampaign && process.env.TUT_DEBUG) console.log('DEBUG focuslog', JSON.stringify(await ev(() => (window.__fl || []).slice(-6))));
   if (!toCampaign && process.env.TUT_DEBUG) console.log('DEBUG card', JSON.stringify(await ev(() => ({ screen: PAVE.debug.screen, focus: PAVE.debug.padFocus && (PAVE.debug.padFocus.id || PAVE.debug.padFocus.textContent), last: PAVE.debug.lastInput, end: !document.querySelector('.tutEnd').classList.contains('hidden'), paused: document.getElementById('pauseMenu').classList.contains('hidden') ? 'no' : 'pauseMenu' }))));
   log.push((toCampaign ? 'ok   ' : 'FAIL ') + side + '/' + dev + '  finish card: TO THE CAMPAIGN works');
   await p.screenshot({ path: path.join(__dirname, 'out', 'tut-' + side + '-' + dev + '.png') });
