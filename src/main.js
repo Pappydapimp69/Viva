@@ -612,12 +612,14 @@
     }
     return false;
   }
-  let modalSeen = null, modalAt = 0;
+  let modalSeen = null, modalAt = 0, navLatch = false;
   function menuPad() {
     // a panel that pops up mid-play ignores input held over from the game for a moment
     const m = modalEl();
-    if (m !== modalSeen) { modalSeen = m; modalAt = performance.now(); }
+    if (m !== modalSeen) { modalSeen = m; modalAt = performance.now(); navLatch = !!m; }
     if (m && performance.now() - modalAt < 600) { if (!padFocus || !focusables().includes(padFocus)) setFocus(defaultFocus(focusables())); return; }
+    // a stick or D-pad still held from play must be let go once before it moves the panel's focus
+    if (navLatch) { if (pad.navDir === null) navLatch = false; else pad.nav = null; }
     const list = focusables();
     // the first input on a screen only lands focus; it doesn't also move it
     if (!padFocus || !list.includes(padFocus)) { setFocus(defaultFocus(list)); return; }

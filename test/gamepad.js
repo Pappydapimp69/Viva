@@ -109,6 +109,16 @@ const path = require('path');
   await tap(0);
   ok(await p.evaluate((id) => PAVE.debug.world.blocs[0].target === id, lmId), 'A marches the bloc to the snapped landmark');
   await tap(5); ok(await p.evaluate(() => PAVE.debug.tool) === 'casseurs', 'RB reaches Casseurs on the protest side');
+  // a panel that pops up while the stick is still held from play must not move its focus
+  await p.evaluate(() => PAVE.debug.startTutorial('protest'));
+  await p.waitForFunction(() => PAVE.debug.tut && PAVE.debug.screen === null, null, { timeout: 15000 });
+  await tap(13);
+  await p.evaluate(() => { __pad.axes = [-0.95, 0, 0, 0]; }); await p.waitForTimeout(300);
+  await p.evaluate(() => { const t = PAVE.debug.tut; t.i = t.steps.length - 1; t.next(); }); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => PAVE.debug.padFocus && PAVE.debug.padFocus.id) === 'tutCampaign', 'stick held through a pop-up does not move its focus');
+  await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(200);
+  await p.evaluate(() => { __pad.axes = [-0.95, 0, 0, 0]; }); await p.waitForTimeout(200); await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => PAVE.debug.padFocus && PAVE.debug.padFocus.id) === 'tutStay', 'a fresh push does move it');
   ok(errs.length === 0, 'no page errors ' + errs.join(' | '));
   await b.close();
 })();
