@@ -17,6 +17,7 @@
       title: 'Look around',
       mk: MOUSE_PAN,
       pad: 'Push the <b>left stick</b> to move the camera. The ring in the middle of the screen is your cursor.',
+      touch: '<b>Drag one finger</b> across the map to move the camera.',
       setup(t) { t.s.travel = 0; t.s.lx = t.cam.x; t.s.ly = t.cam.y; },
       tick(t) {
         // count only steady player panning: ignore the opening frames and any jump (camera clamps, recentres)
@@ -30,6 +31,7 @@
       title: 'Zoom in',
       mk: 'Roll the <b>mouse wheel</b> forward to zoom in on the streets. Roll it back any time to see the whole city.',
       pad: 'Zoom in with ' + btn('RT') + ' (or push the <b>right stick</b> up). ' + btn('LT') + ' zooms back out to see the whole city.',
+      touch: '<b>Pinch outwards</b> with two fingers to zoom in on the streets. Pinch in to see the whole city.',
       setup(t) { t.s.z0 = t.cam.tz; },
       done: (t) => t.cam.tz > t.s.z0 * 1.5,
     },
@@ -194,6 +196,7 @@
     },
     {
       title: 'Call for backup',
+      touch: 'Short of people? Tap <b>MOBILISE</b> in the toolbar: the group chat brings 800 more.',
       mk: 'Short of people? Press ' + kb('5') + ' to <b>Mobilise</b>: the group chat brings 800 more.',
       pad: 'Short of people? Press <b>D-pad up</b> to <b>Mobilise</b>: the group chat brings 800 more.',
       hi: '#tool_mobilise',
@@ -328,6 +331,7 @@
     },
     {
       title: 'Reinforcements',
+      touch: 'Tap <b>REINFORCE</b> in the toolbar: a fresh company arrives from the police base.',
       mk: 'Press ' + kb('R') + ' to <b>Reinforce</b>: a fresh company arrives from the police base.',
       pad: 'Press <b>D-pad up</b> to <b>Reinforce</b>: a fresh company arrives from the police base.',
       hi: '#tool_reinforce',
@@ -390,7 +394,23 @@
     const L = w.map.landmarks, nm = (i) => (L[i] || L[0]).name;
     return html.replace(/\{lm0\}/g, nm(0)).replace(/\{lm1\}/g, nm(1)).replace(/\{lm2\}/g, nm(2)).replace(/\{sq1\}/g, sq ? sq.name : 'CRS 8');
   };
-  Tutorial.prototype.device = function () { return this.api.lastInput === 'pad' ? 'pad' : 'mk'; };
+  Tutorial.prototype.device = function () { const l = this.api.lastInput; return l === 'pad' ? 'pad' : l === 'touch' ? 'touch' : 'mk'; };
+  // touch wording: steps can give their own; otherwise the mouse text is translated
+  const TOOLBTN = { '1': 'MARCH', '2': 'CASSEURS', '3': 'FIREWORKS', '4': 'BARRICADE', '5': 'MOBILISE', 'C': 'CHARGE', 'G': 'GAS', 'B': 'BARRIER', 'F': 'POMPIERS', 'R': 'REINFORCE', 'M': 'LINE' };
+  function touchify(html) {
+    return html
+      .replace(/Press <kbd>Tab<\/kbd>/g, 'Tap the <b>1×</b> button (top right)')
+      .replace(/<kbd>Tab<\/kbd>/g, 'the <b>1×</b> button')
+      .replace(/Press <kbd>([1-5CGBFRM])<\/kbd>( or click the <b>[^<]+<\/b> button)?/g, (m, k) => 'Tap <b>' + TOOLBTN[k] + '</b> in the toolbar')
+      .replace(/Press <kbd>Q<\/kbd>( \(or click <b>B<\/b> on the left\))?/g, 'Tap <b>B</b> in the list on the left')
+      .replace(/Press <kbd>Q<\/kbd>/g, 'Tap a squad in the list on the left')
+      .replace(/or press <kbd>2<\/kbd>/g, 'or tap it in the list on the left')
+      .replace(/<b>Left-click<\/b>/g, '<b>Tap</b>').replace(/left-click/g, 'tap').replace(/Left-click/g, 'Tap')
+      .replace(/<b>Right-click<\/b>/g, '<b>Long-press</b>')
+      .replace(/<b>click and drag<\/b>/g, '<b>drag a finger</b>')
+      .replace(/ \(or a number key[^)]*\)/g, '')
+      .replace(/<kbd>Enter<\/kbd>/g, 'Continue');
+  }
   Tutorial.prototype.render = function (force) {
     const dev = this.device();
     if (!force && dev === this.lastDev && this.i === this.lastI) return;
@@ -399,12 +419,12 @@
     if (this.finished) return;
     const st = this.step();
     el.querySelector('.tutStep').textContent = 'STEP ' + (this.i + 1) + ' / ' + this.steps.length;
-    el.querySelector('.tutDev').textContent = dev === 'pad' ? '🎮 Controller' : '🖱 Mouse & keyboard';
+    el.querySelector('.tutDev').textContent = dev === 'pad' ? '🎮 Controller' : dev === 'touch' ? '👆 Touch' : '🖱 Mouse & keyboard';
     el.querySelector('.tutTitle').textContent = st.title;
-    el.querySelector('.tutText').innerHTML = this.text(st[dev] || st.both);
+    el.querySelector('.tutText').innerHTML = this.text(dev === 'touch' ? (st.touch || (st.mk ? touchify(st.mk) : st.both)) : (st[dev] || st.both));
     const cont = el.querySelector('.tutContinue');
     cont.classList.toggle('hidden', !st.info);
-    cont.innerHTML = dev === 'pad' ? 'Continue ' + btn('A') : 'Continue ' + kb('Enter');
+    cont.innerHTML = dev === 'pad' ? 'Continue ' + btn('A') : dev === 'touch' ? 'Continue ›' : 'Continue ' + kb('Enter');
     el.querySelector('.tutDots').innerHTML = this.steps.map((_, k) => '<i class="' + (k < this.i ? 'd' : k === this.i ? 'c' : '') + '"></i>').join('');
     // highlight the HUD element the step is about
     if (this.hiEl) this.hiEl.classList.remove('tutHi');

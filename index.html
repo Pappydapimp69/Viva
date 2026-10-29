@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>PAVÉ — Paris Riot Manager</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -135,7 +135,7 @@
 
   <div id="controlsMenu" class="screen hidden">
     <h2>CONTROLS</h2>
-    <div class="row"><button id="ctlMk">🖱 MOUSE &amp; KEYBOARD</button><button id="ctlPad">🎮 CONTROLLER</button></div>
+    <div class="row"><button id="ctlMk">🖱 MOUSE &amp; KEYBOARD</button><button id="ctlPad">🎮 CONTROLLER</button><button id="ctlTouch">👆 TOUCH</button></div>
     <div id="ctlBody" class="ctlGrid"></div>
     <button data-go="back" class="back">← BACK</button>
   </div>
@@ -183,6 +183,7 @@
   </div>
 
   <div id="loading" class="screen hidden"><div class="title small">PAVÉ</div><div id="loadText">Paving the streets…</div></div>
+  <div id="rotate"><div class="big">📱↻</div><div>TURN YOUR PHONE SIDEWAYS</div><div style="font-family:var(--body);color:#aaa;font-size:13px">PAVÉ plays in landscape.</div></div>
   <div id="achToast"></div>
   <div id="padCursor" class="hidden"></div>
   <div id="padLabel" class="hidden"></div>

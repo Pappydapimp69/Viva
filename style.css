@@ -199,3 +199,36 @@ body.pad .padOnly { display: inline-block; }
 .ctlGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; width: min(980px, 94vw); background: rgba(16,17,20,.9); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
 .ctlRow { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
 .ctlRow > span:first-child { color: #ddd; } .ctlRow > span:last-child { text-align: right; color: #fff; }
+
+/* ---------------- touch ---------------- */
+#view { touch-action: none; }
+body.touchDevice #padHints { display: none; }
+/* keep tappable controls clear of the OS edge-swipe bands */
+body.touch #toolbar { bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+body.touch .tool { width: 74px; height: 70px; }
+body.touch #squadBar .sq { padding: 9px 12px; font-size: 13px; }
+body.touch #btnPause, body.touch #btnSpeed { padding: 9px; font-size: 15px; }
+@media (max-width: 900px) {
+  #topLeft { max-width: 46vw; min-width: 0; font-size: 12px; padding: 8px; }
+  #topRight { width: 44vw; padding: 8px; }
+  #carsBadge { font-size: 12px; padding: 5px 10px; }
+  #toolbar { gap: 5px; max-width: 98vw; overflow-x: auto; }
+  .tool { width: 58px !important; height: 60px !important; font-size: 9px; }
+  #minimap { width: 120px; height: 120px; }
+  #squadBar { bottom: 150px; }
+  #tutorial { top: auto; bottom: 96px; font-size: 13px; }
+  .tutTitle { font-size: 16px; }
+}
+@media (max-width: 900px) {
+  #tutorial { width: min(400px, 50vw); left: auto; right: 8px; transform: none; top: auto; bottom: 92px; padding: 8px 10px 6px; }
+  .tutText { font-size: 12px; line-height: 1.35; }
+  .tutTitle { font-size: 14px; margin: 2px 0 3px; }
+  .tutDots i { width: 6px; height: 6px; }
+  #resWhy { font-size: 10px; }
+  .sq { min-width: 0; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+#rotate { display: none; }
+@media (orientation: portrait) and (max-width: 700px) {
+  #rotate { display: flex; position: fixed; inset: 0; z-index: 100; background: #0b0b0d; color: #fff; flex-direction: column; align-items: center; justify-content: center; gap: 14px; font-family: var(--font); text-align: center; padding: 24px; }
+  #rotate .big { font-size: 64px; }
+}

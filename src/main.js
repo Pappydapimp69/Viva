@@ -68,7 +68,7 @@
     for (const s of screens) $(s).classList.toggle('hidden', s !== id);
     current = id;
     if (id === 'campaignMenu') buildLevelGrid();
-    if (id === 'controlsMenu') buildControls(lastInput === 'pad' ? 'pad' : 'mk');
+    if (id === 'controlsMenu') buildControls(lastInput === 'pad' ? 'pad' : lastInput === 'touch' ? 'touch' : 'mk');
     if (id === 'mainMenu' || id === 'tutorialMenu') refreshTutorialBadges();
     if (id === 'settingsMenu') loadSettingsUI();
   }
@@ -138,6 +138,11 @@
       '✊ Protest': [['March the selected bloc', 'left-click (tool ' + K_('1') + ')'], ['Next bloc', K_('Q')], ['Casseurs', K_('2') + ' then click the crowd'], ['Fireworks', K_('3') + ' then click police'], ['Barricade', K_('4') + ' then drag across a street'], ['Mobilise', K_('5')], ['Pin a fire truck', 'March onto it'], ['Pan', 'right-drag']],
       '🛡 Police': [['Select a squad', 'left-click it, or ' + K_('1') + '–' + K_('9') + ' / ' + K_('Q')], ['Form a line', 'right-click a street'], ['Charge', K_('C') + ' then click'], ['Gas', K_('G') + ' then click'], ['Barrier', K_('B') + ' then drag'], ['Pompiers', K_('F') + ' then click a fire'], ['Reinforce', K_('R')]],
     },
+    touch: {
+      'Camera': [['Move', 'drag one finger'], ['Zoom', 'pinch'], ['Jump', 'tap the minimap'], ['Pause / speed', 'the ❚❚ and 1× buttons, top right']],
+      '✊ Protest': [['Use the tool', 'tap'], ['Pick a tool', 'tap it in the toolbar'], ['Back to March', 'long-press the map'], ['Pick a bloc', 'tap it in the list on the left'], ['Barricade', 'BARRICADE, then drag across a street'], ['Pin a fire truck', 'March, tap the truck']],
+      '🛡 Police': [['Select a squad', 'tap it, or tap it in the list'], ['Form a line', 'long-press a street'], ['Pick a tool', 'tap it in the toolbar'], ['Barrier', 'BARRIER, then drag across a street'], ['Pompiers', 'POMPIERS, then tap a fire']],
+    },
     pad: {
       'Camera': [['Move', 'left stick (cursor stays centred)'], ['Zoom', 'right stick up/down, ' + B_('LT') + ' / ' + B_('RT')], ['Hot spot', 'D-pad down'], ['Pause', B_('Start')], ['Speed 1×/2×/3×', B_('Back')]],
       '✊ Protest': [['Use the tool', B_('A') + ' (cursor snaps to squares, police, trucks)'], ['Change tool', B_('LB') + ' / ' + B_('RB')], ['Cancel / back to March', B_('B')], ['Next bloc', B_('Y') + ' (jumps there)'], ['Go to bloc', B_('X')], ['Barricade', 'hold ' + B_('A') + ', move, release'], ['Mobilise', 'D-pad up']],
@@ -145,12 +150,13 @@
     },
   };
   function buildControls(dev) {
-    $('ctlMk').classList.toggle('big', dev === 'mk'); $('ctlPad').classList.toggle('big', dev === 'pad');
+    $('ctlMk').classList.toggle('big', dev === 'mk'); $('ctlPad').classList.toggle('big', dev === 'pad'); $('ctlTouch').classList.toggle('big', dev === 'touch');
     $('ctlBody').innerHTML = Object.entries(CONTROLS[dev]).map(([h, rows]) =>
       '<div><h3>' + h + '</h3>' + rows.map(([a, b]) => '<div class="ctlRow"><span>' + a + '</span><span>' + b + '</span></div>').join('') + '</div>').join('');
   }
   $('ctlMk').onclick = () => buildControls('mk');
   $('ctlPad').onclick = () => buildControls('pad');
+  $('ctlTouch').onclick = () => buildControls('touch');
 
   function loadSettingsUI() {
     $('setVol').value = settings.vol; $('setCrowd').value = String(settings.crowd);
@@ -722,6 +728,7 @@
     if (pad.connected && pad.any) lastInput = 'pad';
     const on = pad.connected && lastInput === 'pad';
     document.body.classList.toggle('pad', on);
+    document.body.classList.toggle('touch', lastInput === 'touch');
     const st = $('padStatus');
     if (st) st.textContent = pad.connected ? pad.id.replace(/\s*\(.*$/, '').slice(0, 40) : 'None — press a button on it';
     const modal = modalEl();
@@ -738,6 +745,81 @@
       $('padHints').textContent = PAD_HINTS[world.side];
     }
   }
+  // ------------------------------------------------------------ touch
+  // One finger: tap = act, drag = pan (or draw a barricade with that tool),
+  // long-press = the right-click action. Two fingers: pinch to zoom, drag to pan.
+  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  if (isTouch) document.body.classList.add('touchDevice');
+  const tp = new Map();
+  let tg = null; // current gesture
+  const tpos = (t) => { const r = canvas.getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; };
+  function touchStart(e) {
+    e.preventDefault();
+    audio.init();
+    lastInput = 'touch';
+    for (const t of e.changedTouches) tp.set(t.identifier, tpos(t));
+    if (!world || paused) return;
+    const pts = [...tp.values()];
+    if (pts.length === 1) {
+      const p = pts[0], w = toWorld(p.x, p.y);
+      mouse.x = p.x; mouse.y = p.y;
+      tg = { kind: 'one', sx: p.x, sy: p.y, lx: p.x, ly: p.y, moved: false, long: false, t0: performance.now() };
+      if (tool === 'barricade' || tool === 'barrier') { tg.draw = true; mouse.drag = { x: w.x, y: w.y }; }
+      tg.timer = setTimeout(() => {
+        if (!tg || tg.moved) return;
+        tg.long = true;
+        // held still with a drawing tool: cancel it and go back to the default tool
+        if (tg.draw) { tg.draw = false; mouse.drag = null; pickTool(world.side === S.POLICE ? 'move' : 'march'); }
+        else { const lw = toWorld(tg.sx, tg.sy); if (world.side === S.POLICE) orderSel(lw.x, lw.y, false); else pickTool('march'); }
+        if (navigator.vibrate) navigator.vibrate(25);
+      }, 480);
+    } else if (pts.length === 2) {
+      if (tg && tg.timer) clearTimeout(tg.timer);
+      if (mouse.drag) mouse.drag = null;
+      const [a, b] = pts;
+      tg = { kind: 'two', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: cam.tz, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    }
+  }
+  function touchMove(e) {
+    e.preventDefault();
+    for (const t of e.changedTouches) if (tp.has(t.identifier)) tp.set(t.identifier, tpos(t));
+    if (!world || !tg) return;
+    const pts = [...tp.values()];
+    if (tg.kind === 'one' && pts.length === 1) {
+      const p = pts[0];
+      mouse.x = p.x; mouse.y = p.y;
+      if (!tg.moved && Math.hypot(p.x - tg.sx, p.y - tg.sy) > 12) tg.moved = true;
+      if (tg.moved && !tg.draw) { cam.x -= (p.x - tg.lx) / cam.zoom; cam.y -= (p.y - tg.ly) / cam.zoom; }
+      tg.lx = p.x; tg.ly = p.y;
+    } else if (tg.kind === 'two' && pts.length >= 2) {
+      const [a, b] = pts, d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      cam.tz = cam.zoom = P.clamp(tg.z0 * d / tg.d0, 0.9, 16);
+      cam.x -= (mx - tg.mx) / cam.zoom; cam.y -= (my - tg.my) / cam.zoom;
+      tg.mx = mx; tg.my = my;
+      mouse.x = mx; mouse.y = my;
+    }
+  }
+  function touchEnd(e) {
+    e.preventDefault();
+    for (const t of e.changedTouches) tp.delete(t.identifier);
+    if (!world || !tg) { if (!tp.size) tg = null; return; }
+    if (tg.kind === 'one' && !tp.size) {
+      clearTimeout(tg.timer);
+      const w = toWorld(tg.lx, tg.ly);
+      if (tg.draw && mouse.drag) { placeLine(mouse.drag, w); mouse.drag = null; }
+      else if (!tg.moved && !tg.long && !paused) primary(w.x, w.y);
+    }
+    if (!tp.size) tg = null;
+  }
+  canvas.addEventListener('touchstart', touchStart, { passive: false });
+  canvas.addEventListener('touchmove', touchMove, { passive: false });
+  canvas.addEventListener('touchend', touchEnd, { passive: false });
+  canvas.addEventListener('touchcancel', touchEnd, { passive: false });
+  mm.addEventListener('touchstart', (e) => { e.preventDefault(); const t = e.changedTouches[0]; miniJump(t); }, { passive: false });
+  mm.addEventListener('touchmove', (e) => { e.preventDefault(); const t = e.changedTouches[0]; miniJump(t); }, { passive: false });
+  // mouse and touch emulation: a real mouse move switches the prompts back
+  addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') { lastInput = 'touch'; } });
+
   // The Guide/Home button opens a system overlay that steals focus: pause rather than run unseen.
   function autoPause() { if (world && !paused && !world.result && !current) togglePause(); }
   addEventListener('blur', autoPause);
