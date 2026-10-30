@@ -230,3 +230,14 @@ test('fireworks hurt police: focused volleys injure and remove officers', () => 
   w.updateGrids(0);
   assert.ok(w.polCount < n0, 'injured officers left the field (' + n0 + ' -> ' + w.polCount + ')');
 });
+
+test('readability gate: sides tell apart by brightness alone (greyscale)', () => {
+  global.document = undefined; // render.js palette only
+  require('../src/render.js');
+  const L = (h) => { const n = parseInt(h.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255; return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const pal = P.PALETTE;
+  const prot = [...pal.protDark, ...pal.protMid, ...pal.protBright, ...pal.flags, pal.leaving];
+  for (const h of prot) assert.ok(L(h) <= 110 || L(h) >= 170, 'protester colour ' + h + ' at ' + L(h).toFixed(0) + ' sits in the police band');
+  for (const h of [pal.pol, pal.polHurt]) assert.ok(L(h) >= 125 && L(h) <= 165, 'police colour ' + h + ' at ' + L(h).toFixed(0));
+  assert.ok(L(pal.cass) < 25, 'casseurs read darkest');
+});

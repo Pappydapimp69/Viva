@@ -10,23 +10,30 @@
   function hash(x, y, s) { let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 
   // ------------------------------------------------------------ palettes
+  // Readability by brightness alone (Brain: value first, check in greyscale). Bands, on the
+  // 0-255 luminance scale: casseurs < 25, protesters <= 110 or >= 170, police 125-165.
+  // test/sim.test.js enforces these bands on the palettes below.
+  P.PALETTE = {
+    protDark: ['#26272b', '#2f3136', '#3a3c42', '#433d38', '#2b3340', '#352a26', '#4b4b50', '#1f2226', '#55504a', '#3e4652'],
+    protMid: ['#505257', '#584e45', '#4a525c', '#c8c8c8', '#5a4a3e'],
+    protBright: ['#d9d9d9', '#9b2d2d', '#c9b02a', '#2f5a3a', '#b0541e', '#e8e2d0', '#6a3d8a'],
+    flags: ['#e0302f', '#25803f', '#8b3fc0', '#f2f2f2', '#f0c419'],
+    cass: '#0e0e10', pol: '#408cff', polHurt: '#966ed2', leaving: '#5a5a5a',
+  };
+  const PAL = P.PALETTE;
   const PROT_COLS = [];
-  (function () {
-    const dark = ['#26272b', '#2f3136', '#3a3c42', '#433d38', '#2b3340', '#352a26', '#4b4b50', '#1f2226', '#55504a', '#3e4652'];
-    const mid = ['#6d6f75', '#7a6f62', '#5f6b78', '#8b8b8b', '#6e5b4b'];
-    const bright = ['#d9d9d9', '#9b2d2d', '#c9b02a', '#2d6a9b', '#c76a2a', '#e8e2d0', '#6a3d8a'];
-    for (let i = 0; i < 256; i++) {
-      const r = hash(i, 7, 3);
-      const h = r < 0.72 ? dark[i % dark.length] : r < 0.9 ? mid[i % mid.length] : bright[i % bright.length];
-      const c = hexToRgb(h);
-      PROT_COLS.push(abgr(c[0], c[1], c[2]));
-    }
-  })();
-  const FLAG_COLS = ['#e0302f', '#2ea05a', '#8b3fc0', '#1f63e0', '#f0c419'].map((h) => { const c = hexToRgb(h); return abgr(c[0], c[1], c[2]); });
-  const CASS_COL = abgr(14, 14, 16), CASS_HI = abgr(40, 40, 44);
-// police must read against dark winter coats: bright blue, white helmet, dark rim
-  const POL_COL = abgr(38, 110, 240), POL_HI = abgr(235, 242, 255), POL_RIM = abgr(8, 18, 52), POL_STUN = abgr(240, 200, 60), POL_HURT = abgr(150, 110, 210);
-  const LEAVE_COL = abgr(110, 110, 110);
+  for (let i = 0; i < 256; i++) {
+    const r = hash(i, 7, 3);
+    const h = r < 0.72 ? PAL.protDark[i % PAL.protDark.length] : r < 0.9 ? PAL.protMid[i % PAL.protMid.length] : PAL.protBright[i % PAL.protBright.length];
+    const c = hexToRgb(h);
+    PROT_COLS.push(abgr(c[0], c[1], c[2]));
+  }
+  const hexA = (h) => { const c = hexToRgb(h); return abgr(c[0], c[1], c[2]); };
+  const FLAG_COLS = PAL.flags.map(hexA);
+  const CASS_COL = hexA(PAL.cass), CASS_HI = abgr(40, 40, 44);
+  // police: their own brightness band, plus a shape cue (white helmet, dark rim) so colour is never the only carrier
+  const POL_COL = hexA(PAL.pol), POL_HI = abgr(235, 242, 255), POL_RIM = abgr(8, 18, 52), POL_STUN = abgr(240, 200, 60), POL_HURT = hexA(PAL.polHurt);
+  const LEAVE_COL = hexA(PAL.leaving);
 
   // ------------------------------------------------------------ sprites
   const sprites = {};
@@ -48,7 +55,7 @@
   }
 
   // ------------------------------------------------------------ particles
-  const PT = { SMOKE: 0, FLAME: 1, GAS: 2, FLARE: 3, SPARK: 4, WATER: 5, EMBER: 6 };
+  const PT = { SMOKE: 0, FLAME: 1, GAS: 2, FLARE: 3, SPARK: 4, WATER: 5, EMBER: 6, FLASH: 7 };
   P.PT = PT;
   function Particles(cap) {
     this.cap = cap; this.n = 0;
@@ -210,6 +217,24 @@
       g.globalAlpha = 1;
     }
 
+    // facades: south walls show below the roofline, taller lots taller walls; windows on them
+    const windows = [];
+    for (let ty = 0; ty < H - 1; ty++) for (let tx = 0; tx < W; tx++) {
+      const k = ty * W + tx;
+      if (tile[k] !== T.BUILDING || tile[k + W] === T.BUILDING) continue;
+      const hgt = lotH[lot[k]] || 1, fh = Math.round(TS * (0.7 + 0.55 * hgt));
+      const rc = lotCol[lot[k]] || [130, 135, 140];
+      const y1 = (ty + 1) * TS, y0 = y1 - fh, x0 = tx * TS;
+      g.fillStyle = `rgb(${rc[0] * 0.55 + 18 | 0},${rc[1] * 0.52 + 14 | 0},${rc[2] * 0.5 + 10 | 0})`;
+      g.fillRect(x0, y0, TS, fh);
+      g.fillStyle = 'rgba(255,245,225,0.35)'; g.fillRect(x0, y0, TS, 1);            // cornice
+      g.fillStyle = 'rgba(20,22,28,0.75)';                                           // windows
+      for (let wy = y0 + 2; wy < y1 - 1; wy += 3) for (let wx = x0 + 1; wx < x0 + TS - 1; wx += 2) {
+        g.fillRect(wx, wy, 1, 1);
+        if (hash(wx, wy, 11) < 0.33) windows.push({ x: (wx + 0.5) / TS, y: (wy + 0.5) / TS });
+      }
+    }
+
     // roof furniture: chimney stacks, skylights, rooftop gardens
     for (let i = 0; i < W * H / 14; i++) {
       const tx = R.int(1, W - 2), ty = R.int(1, H - 2), k = ty * W + tx;
@@ -305,7 +330,7 @@
       md[k] = tt === T.BUILDING || tt === T.COURT ? abgr(70, 74, 80) : tt === T.PARK ? abgr(70, 86, 50) : tt === T.PLAZA ? abgr(150, 144, 132) : tt === T.WATER ? abgr(50, 80, 95) : abgr(120, 122, 125);
     }
     mmg.putImageData(mi, 0, 0);
-    return { map: cv, trees: tc, mini: mm };
+    return { map: cv, trees: tc, mini: mm, windows };
   };
 
   // ------------------------------------------------------------ renderer
@@ -315,7 +340,7 @@
     this.agentCanvas = makeCanvas(4, 4);
     this.ag = this.agentCanvas.getContext('2d');
     this.img = null; this.buf = null;
-    this.parts = new Particles(6000);
+    this.parts = new Particles(9000);
     this.time = 0;
     this.discCache = { r: -1, off: null };
   }
@@ -324,6 +349,32 @@
     this.w = w;
     this.tex = P.bakeMap(w.map);
     this.parts.n = 0;
+    // permanence: scorch, glass, debris and spent canisters stay where they happened
+    this.decal = makeCanvas(w.map.W * P.TS, w.map.H * P.TS);
+    this.dg = this.decal.getContext('2d');
+    this.trauma = 0;
+  };
+  // screen shake from 'trauma' (0..1): offset grows with trauma squared, so small hits stay small
+  Renderer.prototype.shake = function (amount) { this.trauma = Math.min(1, (this.trauma || 0) + amount); };
+  Renderer.prototype.stamp = function (kind, x, y) {
+    const g = this.dg, TS = P.TS;
+    if (!g) return;
+    const X = x * TS, Y = y * TS;
+    if (kind === 'scorch') {
+      const r = TS * 4.2, grd = g.createRadialGradient(X, Y, 0, X, Y, r);
+      grd.addColorStop(0, 'rgba(12,10,8,0.55)'); grd.addColorStop(0.6, 'rgba(20,16,12,0.25)'); grd.addColorStop(1, 'rgba(20,16,12,0)');
+      g.fillStyle = grd; g.beginPath(); g.arc(X, Y, r, 0, 6.283); g.fill();
+      g.fillStyle = 'rgba(200,215,225,0.7)';                       // shattered glass
+      for (let i = 0; i < 22; i++) { const a = Math.random() * 6.283, d = TS * (1.5 + Math.random() * 3); g.fillRect(X + Math.cos(a) * d, Y + Math.sin(a) * d, 1, 1); }
+    } else if (kind === 'burst') {
+      g.strokeStyle = 'rgba(15,12,10,0.35)'; g.lineWidth = 1;
+      for (let i = 0; i < 10; i++) { const a = i * 0.628 + Math.random() * 0.3; g.beginPath(); g.moveTo(X, Y); g.lineTo(X + Math.cos(a) * TS * 2.2, Y + Math.sin(a) * TS * 2.2); g.stroke(); }
+    } else if (kind === 'canister') {
+      g.fillStyle = 'rgba(90,95,90,0.9)'; g.fillRect(X - 1, Y - 1, 3, 2);
+      g.fillStyle = 'rgba(230,230,220,0.18)'; g.beginPath(); g.arc(X, Y, TS * 1.6, 0, 6.283); g.fill();
+    } else if (kind === 'debris') {
+      for (let i = 0; i < 28; i++) { const a = Math.random() * 6.283, d = Math.random() * TS * 3; g.fillStyle = Math.random() < 0.5 ? 'rgba(110,78,48,0.85)' : 'rgba(60,44,30,0.85)'; g.fillRect(X + Math.cos(a) * d, Y + Math.sin(a) * d, 2, 1); }
+    }
   };
 
   Renderer.prototype.resize = function (cw, ch) {
@@ -347,10 +398,18 @@
         p.add(PT.SPARK, e.x, e.y, Math.cos(a) * s, Math.sin(a) * s, 1.1 + Math.random() * 0.5, 0.7, 0, cols[i % 2 === 0 ? 0 : (Math.random() * 4) | 0]);
       }
       for (let i = 0; i < 6; i++) p.add(PT.SMOKE, e.x, e.y, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 3, 3, 2, 1);
+      p.add(PT.FLASH, e.x, e.y, 0, 0, 0.22, 6, 40);
+      this.stamp('burst', e.x, e.y);
     } else if (e.type === 'gasLand') {
       for (let i = 0; i < 10; i++) p.add(PT.GAS, e.x, e.y, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4, 5 + Math.random() * 3, 3, 1.8);
+      this.stamp('canister', e.x, e.y);
     } else if (e.type === 'ignite') {
       for (let i = 0; i < 14; i++) p.add(PT.EMBER, e.x, e.y, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 0.8, 0.6, 0);
+      p.add(PT.FLASH, e.x, e.y, 0, 0, 0.3, 4, 30);
+      this.stamp('scorch', e.x, e.y);
+    } else if (e.type === 'barricadeDown') {
+      this.stamp('debris', e.x, e.y);
+      for (let i = 0; i < 8; i++) p.add(PT.SMOKE, e.x, e.y, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, 2, 2, 2, 1);
     }
   };
 
@@ -363,13 +422,17 @@
 
     // visible tile bounds
     const vx0 = cam.x - cw / 2 / z, vy0 = cam.y - ch / 2 / z, vx1 = cam.x + cw / 2 / z, vy1 = cam.y + ch / 2 / z;
-    const ox = cw / 2 - cam.x * z, oy = ch / 2 - cam.y * z;
+    // camera shake: trauma decays, offset ~ trauma^2 (smooth noise, never on input mapping)
+    this.trauma = Math.max(0, (this.trauma || 0) - dt * 1.6);
+    const tq = this.trauma * this.trauma * 14, tt = this.time * 37;
+    const ox = cw / 2 - cam.x * z + tq * (Math.sin(tt) + Math.sin(tt * 2.3)) * 0.5, oy = ch / 2 - cam.y * z + tq * (Math.cos(tt * 1.3) + Math.sin(tt * 2.9)) * 0.5;
 
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#2a2c30';
     g.fillRect(0, 0, cw, ch);
     g.imageSmoothingEnabled = z < TS * 1.2;
     g.drawImage(this.tex.map, ox, oy, map.W * z, map.H * z);
+    if (this.decal) g.drawImage(this.decal, ox, oy, map.W * z, map.H * z);
 
     g.setTransform(z, 0, 0, z, ox, oy); // world units from here
 
@@ -486,7 +549,7 @@
       if (c.state !== 1) continue;
       const near = c.cx > vx0 - 20 && c.cx < vx1 + 20 && c.cy > vy0 - 20 && c.cy < vy1 + 20;
       if (!near) continue;
-      if (Math.random() < c.inten * dt * 9) parts.add(PT.SMOKE, c.cx + (Math.random() - 0.5) * 2, c.cy + (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 1.5, -0.5 - Math.random(), 5 + Math.random() * 4, 2.5, 2.2, Math.random() < 0.5 ? 0 : 1);
+      if (Math.random() < c.inten * dt * 14) parts.add(PT.SMOKE, c.cx + (Math.random() - 0.5) * 2, c.cy + (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 1.5, -0.5 - Math.random(), 7 + Math.random() * 5, 3.2, 3, Math.random() < 0.6 ? 0 : 1);
       if (Math.random() < c.inten * dt * 14) parts.add(PT.FLAME, c.cx + (Math.random() - 0.5) * c.w, c.cy + (Math.random() - 0.5) * c.h, (Math.random() - 0.5) * 1.2, -1.2 - Math.random() * 1.5, 0.5 + Math.random() * 0.4, 1.6, -1.6);
     }
     // flares carried in the crowd
@@ -513,12 +576,13 @@
     // particles
     const smokeA = soft('#3b3b3b', 64), smokeB = soft('#7d7b78', 64), flame = soft('#ff8a1e', 32, 0.2), flare = soft('#ff4d6d', 64),
       water = soft('#cfe9ff', 16, 0.5), ember = soft('#ffcc55', 16, 0.5);
+    const flashSp = soft('#fff2c8', 64, 0.15);
     const fwc = [soft('#ff3b3b', 16, 0.5), soft('#ffd23b', 16, 0.5), soft('#5cff7a', 16, 0.5), soft('#ff7af0', 16, 0.5)];
     for (let pass = 0; pass < 2; pass++) {
       g.globalCompositeOperation = pass === 0 ? 'source-over' : 'lighter';
       for (let i = 0; i < parts.n; i++) {
         const t = parts.type[i];
-        const additive = t === PT.FLAME || t === PT.SPARK || t === PT.EMBER;
+        const additive = t === PT.FLAME || t === PT.SPARK || t === PT.EMBER || t === PT.FLASH;
         if ((pass === 1) !== additive) continue;
         const x = parts.x[i], y = parts.y[i], s = parts.size[i];
         if (x < vx0 - s || x > vx1 + s || y < vy0 - s || y > vy1 + s) continue;
@@ -531,6 +595,7 @@
           case PT.FLAME: sp = flame; g.globalAlpha = Math.min(1, lf * 1.4); break;
           case PT.SPARK: sp = fwc[parts.col[i] - 4] || fwc[0]; g.globalAlpha = lf; break;
           case PT.WATER: sp = water; g.globalAlpha = 0.7 * lf; break;
+          case PT.FLASH: sp = flashSp; g.globalAlpha = lf * 0.9; break;
           default: sp = ember; g.globalAlpha = lf;
         }
         g.drawImage(sp, x - s / 2, y - s / 2, s, s);
@@ -568,11 +633,19 @@
     // night pass
     if (w.night) {
       g.setTransform(1, 0, 0, 1, 0, 0);
-      g.fillStyle = 'rgba(6,10,28,0.74)';
+      // the more of Paris burns, the more the night sky glows orange
+      let burning = 0;
+      for (const c of map.cars) if (c.state === 1) burning++;
+      const k = Math.min(1, burning / 40);
+      g.fillStyle = `rgba(${6 + k * 34 | 0},${10 + k * 10 | 0},${28 - k * 10 | 0},${0.74 - k * 0.1})`;
       g.fillRect(0, 0, cw, ch);
       g.setTransform(z, 0, 0, z, ox, oy);
       g.globalCompositeOperation = 'lighter';
       const lamp = soft('#ffb35c', 64), glow = soft('#ff7a1e', 64), blue = soft('#3d7bff', 64);
+      // lit windows across the city
+      g.fillStyle = 'rgba(255,200,120,0.5)';
+      const ww = Math.max(0.25, 1 / z);
+      for (const wn of this.tex.windows) { if (wn.x < vx0 || wn.x > vx1 || wn.y < vy0 || wn.y > vy1) continue; g.fillRect(wn.x - ww / 2, wn.y - ww / 2, ww, ww); }
       g.globalAlpha = 0.22;
       for (const l of map.lamps) {
         if (l.x < vx0 - 8 || l.x > vx1 + 8 || l.y < vy0 - 8 || l.y > vy1 + 8) continue;

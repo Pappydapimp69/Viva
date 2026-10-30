@@ -11,7 +11,7 @@
     get(k, d) { try { const v = localStorage.getItem('pave.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('pave.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
   };
-  const settings = Object.assign({ vol: 0.7, crowd: 1, edge: false, fps: false, full: false, safe: 0 }, store.get('settings', {}));
+  const settings = Object.assign({ vol: 0.7, music: 0.6, crowd: 1, edge: false, fps: false, full: false, safe: 0 }, store.get('settings', {}));
   const applySafe = () => document.documentElement.style.setProperty('--safe', String(settings.safe || 0));
   applySafe();
   const progress = Object.assign({ unlocked: 1, stars: {}, ach: {}, tut: {} }, store.get('progress', {}));
@@ -44,7 +44,7 @@
   const R = new P.Renderer(canvas);
   let world = null, level = null, levelIdx = -1, chat = null;
   const cam = { x: 160, y: 160, zoom: 3, tz: 3 };
-  let paused = true, speed = 1, acc = 0, last = performance.now();
+  let paused = true, speed = 1, acc = 0, last = performance.now(), hitStop = 0;
   let tool = null, selBloc = 0, selSquad = -1, tut = null;
   let mouse = { x: 0, y: 0, wx: 0, wy: 0, down: false, mid: false, drag: null, lastX: 0, lastY: 0 };
   const keys = {};
@@ -171,9 +171,11 @@
   function loadSettingsUI() {
     $('setVol').value = settings.vol; $('setCrowd').value = String(settings.crowd);
     $('setSafe').value = settings.safe || 0;
+    $('setMusic').value = settings.music;
     $('setEdge').checked = settings.edge; $('setFps').checked = settings.fps; $('setFull').checked = !!document.fullscreenElement;
   }
   $('setVol').oninput = (e) => { settings.vol = +e.target.value; audio.setVolume(settings.vol); saveSettings(); };
+  $('setMusic').oninput = (e) => { settings.music = +e.target.value; audio.setMusic(settings.music); saveSettings(); };
   $('setSafe').oninput = (e) => { settings.safe = +e.target.value; applySafe(); saveSettings(); };
   $('setCrowd').onchange = (e) => { settings.crowd = +e.target.value; saveSettings(); };
   $('setEdge').onchange = (e) => { settings.edge = e.target.checked; saveSettings(); };
@@ -938,6 +940,11 @@
     for (const e of evs) {
       if (tut) tut.onEvent(e);
       R.fxEvent(e);
+      // juice the payoff, not the idle screen: shake falls off with distance from the camera
+      const near = e.x != null ? Math.max(0, 1 - camDist(e.x, e.y) / 90) : 1;
+      const SHAKE = { ignite: 0.12, burst: 0.32, capture: 0.3, retake: 0.2, truckAbandoned: 0.28, barricadeDown: 0.18, gasLand: 0.08, charge: 0.1 };
+      if (SHAKE[e.type]) R.shake(SHAKE[e.type] * near);
+      if ((e.type === 'capture' || e.type === 'truckAbandoned') && near > 0.3) hitStop = 0.18; // a beat of slow motion on the big moments
       chat.event(e, world.time);
       switch (e.type) {
         case 'ignite':
@@ -1081,7 +1088,11 @@
     const y0 = Math.max(0, ((cam.y - rad) / CS) | 0), y1 = Math.min(w.CH - 1, ((cam.y + rad) / CS) | 0);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) nearCrowd += w.densP[y * CW + x];
     for (const c of w.map.cars) if (c.state === 1 && Math.abs(c.cx - cam.x) < rad && Math.abs(c.cy - cam.y) < rad) nearFire++;
-    return { nearCrowd: nearCrowd * Math.min(1, 3 / cam.zoom + 0.4), nearFire, panic: w.avgPanic || 0, trucks: w.trucks.length, paused };
+    // music intensity: fires, police contact, panic and how much is happening on screen
+    let charging = 0; for (const sq of w.squads) if (sq.charge > 0) charging++;
+    const burning = w.map.cars.reduce((a, c) => a + (c.state === 1 ? 1 : 0), 0);
+    const intensity = 0.2 + Math.min(0.3, burning * 0.015) + Math.min(0.25, (w.avgPanic || 0) * 2) + Math.min(0.2, charging * 0.1) + (nearFire ? 0.1 : 0) + (w.canisters.length ? 0.1 : 0);
+    return { nearCrowd: nearCrowd * Math.min(1, 3 / cam.zoom + 0.4), nearFire, panic: w.avgPanic || 0, trucks: w.trucks.length, paused, intensity };
   }
 
   // ------------------------------------------------------------ loop
@@ -1113,7 +1124,9 @@
     cam.y = hh * 2 >= world.map.H ? world.map.H / 2 : P.clamp(cam.y, hh, world.map.H - hh);
 
     if (!paused) {
-      acc += dt * speed;
+      let slow = 1;
+      if (hitStop > 0) { hitStop -= dt; slow = 0.2; }
+      acc += dt * speed * slow;
       let steps = 0;
       while (acc >= P.SIM_DT && steps < 3 * speed) { world.tick(P.SIM_DT); acc -= P.SIM_DT; steps++; }
       if (steps >= 3 * speed) acc = 0; // can't keep up: drop time rather than spiral
@@ -1142,6 +1155,7 @@
     }
     if (R.w !== menuWorld) R.setWorld(menuWorld);
     menuT += dt;
+    audio.update(dt, { nearCrowd: 300, nearFire: 0, panic: 0, trucks: 0, paused: false, intensity: 0.2 });
     menuWorld.tick(P.SIM_DT);
     menuWorld.events.length = 0;
     cam.x += Math.cos(menuT * 0.05) * dt * 3; cam.y += Math.sin(menuT * 0.04) * dt * 2;
@@ -1152,6 +1166,7 @@
   $('ver').textContent = P.VERSION;
   if (!globalThis.steam) $('btnQuit').classList.toggle('hidden', !/Electron/i.test(navigator.userAgent));
   audio.setVolume(settings.vol);
+  audio.setMusic(settings.music);
   show('mainMenu');
   requestAnimationFrame(frame);
 

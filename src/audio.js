@@ -37,6 +37,66 @@
   };
 
   Audio.prototype.setVolume = function (v) { this.vol = v; if (this.master) this.master.gain.value = v; };
+  Audio.prototype.setMusic = function (v) { this.music = v; if (this.musicBus) this.musicBus.gain.value = v * 0.55; };
+
+  // ---------------------------------------------------------------- adaptive music
+  // A minor loop in vertical layers (pad -> kick -> bass -> snare/hats -> arp) that fade in
+  // and out with the action. Notes are scheduled ahead on the audio clock, never by timers
+  // (Brain: setTimeout timing bunches and stutters under main-thread load).
+  const BPM = 96, STEP = 60 / BPM / 4;                        // 16th notes
+  const CHORDS = [[57, 60, 64], [53, 57, 60], [50, 53, 57], [52, 56, 59]]; // Am F Dm E (MIDI)
+  const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const LAYERS = [['pad', 0], ['kick', 0.25], ['bass', 0.42], ['snare', 0.55], ['hats', 0.62], ['arp', 0.78]];
+  Audio.prototype.musicInit = function () {
+    const ctx = this.ctx;
+    this.musicBus = ctx.createGain(); this.musicBus.gain.value = this.music * 0.55; this.musicBus.connect(this.master);
+    this.layer = {};
+    for (const [name] of LAYERS) { const g = ctx.createGain(); g.gain.value = 0; g.connect(this.musicBus); this.layer[name] = g; }
+    this.nextStep = ctx.currentTime + 0.1; this.step = 0; this.intensity = 0;
+  };
+  Audio.prototype.musicUpdate = function (s) {
+    const ctx = this.ctx;
+    if (!this.musicBus) this.musicInit();
+    // smooth intensity; layers fade over ~0.6 s (short vertical fades close most of the lag)
+    const target = s.paused ? 0.12 : Math.max(0.12, Math.min(1, s.intensity || 0));
+    this.intensity += (target - this.intensity) * 0.02;
+    for (const [name, th] of LAYERS) {
+      const on = this.intensity >= th ? 1 : 0;
+      this.layer[name].gain.setTargetAtTime(on * (name === 'pad' ? 0.5 : name === 'arp' ? 0.22 : 0.6), ctx.currentTime, 0.2);
+    }
+    // look-ahead scheduler: everything due in the next 150 ms
+    while (this.nextStep < ctx.currentTime + 0.15) { this.playStep(this.step, this.nextStep); this.nextStep += STEP; this.step = (this.step + 1) % 64; }
+  };
+  Audio.prototype.note = function (bus, type, freq, t, dur, vol, cutoff) {
+    const ctx = this.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    let out = o;
+    if (cutoff) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; o.connect(f); out = f; }
+    out.connect(g); g.connect(bus);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.05);
+  };
+  Audio.prototype.hit = function (bus, t, freq, q, dur, vol, type) {
+    const ctx = this.ctx, src = ctx.createBufferSource(); src.buffer = this.noise;
+    const f = ctx.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain(); src.connect(f); f.connect(g); g.connect(bus);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.start(t); src.stop(t + dur + 0.05);
+  };
+  Audio.prototype.playStep = function (st, t) {
+    const L = this.layer, bar = (st / 16) | 0, s16 = st % 16, chord = CHORDS[bar % 4];
+    if (s16 === 0) for (const m of chord) { this.note(L.pad, 'sawtooth', mtof(m - 12), t, STEP * 16, 0.05, 900); this.note(L.pad, 'sawtooth', mtof(m - 12) * 1.004, t, STEP * 16, 0.04, 700); }
+    if (s16 % 8 === 0 || s16 === 10) { // kick, with its pitch drop
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.connect(g); g.connect(L.kick);
+      o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.18);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.start(t); o.stop(t + 0.35);
+    }
+    if (s16 % 2 === 0) this.note(L.bass, 'square', mtof(chord[0] - 24), t, STEP * 1.6, 0.18, 420);
+    if (s16 === 4 || s16 === 12) this.hit(L.snare, t, 1800, 0.8, 0.18, 0.5);
+    if (s16 % 2 === 1) this.hit(L.hats, t, 8000, 1.5, 0.04, 0.18, 'highpass');
+    if (s16 % 2 === 0) { const m = chord[(s16 / 2) % 3] + 12 * (s16 >= 8 ? 1 : 0); this.note(L.arp, 'square', mtof(m), t, STEP * 1.5, 0.07, 2400); }
+  };
 
   Audio.prototype.update = function (dt, s) {
     const ctx = this.ctx;
@@ -51,15 +111,7 @@
     const sir = s.trucks > 0 && !s.paused ? 0.035 : 0;
     this.sirenG.gain.setTargetAtTime(sir, now, 0.2);
     if (sir) this.siren.frequency.setValueAtTime(((now * 1.2) | 0) % 2 ? 660 : 880, now);
-    // protest drums when the crowd is near and not panicking
-    if (!s.paused && crowd > 0.35 && s.panic < 0.6) {
-      this.drumT -= dt;
-      if (this.drumT <= 0) {
-        const pat = [0.5, 0.25, 0.25, 0.5, 0.5];
-        this.drumT = pat[(this.beat = ((this.beat || 0) + 1) % pat.length)];
-        this.drum(crowd * 0.5);
-      }
-    }
+    this.musicUpdate(s);
     if (!s.paused && s.nearFire > 0) {
       this.crackT -= dt;
       if (this.crackT <= 0) { this.crackT = 0.05 + Math.random() * 0.25 / Math.min(4, s.nearFire); this.click(1800 + Math.random() * 2000, 0.05 * Math.min(1, s.nearFire / 3), 0.02); }
