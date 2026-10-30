@@ -349,9 +349,9 @@
     this.w = w;
     this.tex = P.bakeMap(w.map);
     this.parts.n = 0;
-    // permanence: scorch, glass, debris and spent canisters stay where they happened
-    this.decal = makeCanvas(w.map.W * P.TS, w.map.H * P.TS);
-    this.dg = this.decal.getContext('2d');
+    // permanence: scorch, glass, debris and spent canisters are painted straight into the baked
+    // map image (a separate full-size overlay cost ~17 ms a frame to composite)
+    this.dg = this.tex.map.getContext('2d');
     this.trauma = 0;
   };
   // screen shake from 'trauma' (0..1): offset grows with trauma squared, so small hits stay small
@@ -432,7 +432,6 @@
     g.fillRect(0, 0, cw, ch);
     g.imageSmoothingEnabled = z < TS * 1.2;
     g.drawImage(this.tex.map, ox, oy, map.W * z, map.H * z);
-    if (this.decal) g.drawImage(this.decal, ox, oy, map.W * z, map.H * z);
 
     g.setTransform(z, 0, 0, z, ox, oy); // world units from here
 
