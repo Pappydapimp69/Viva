@@ -1,35 +1,53 @@
-# Next build blueprint (from Brain + ZaneGPT audit, 2026-10-30)
+# PAVÉ — $9.99 build blueprint (Brain + ZaneGPT, 2026-10-30)
 
-## Where we are vs the trailer
-Matched: protest or police sides, casseurs, burning cars + counter, fire spreading, barricades,
-hold the line, crowd routing around gaps, kettling level, capture the landmarks, fireworks vs
-shields, night level, group-chat phone.
-Missing or weak:
-- Scale. Trailer says 100,000 people. Measured: the "100,000" sandbox reaches ~37,000 agents at
-  84 ms per tick (~12 sim fps) on a desktop CPU; ~14,000 at 16 ms. The hook is the scale.
-- "Or play the pompiers" is not a playable side (trucks exist only inside police levels).
-- "Until all of Paris burns": only one night level; no city-wide fire spectacle.
-- "See you next Saturday": no week-to-week structure.
-- Look: flat top-down pixels vs the trailer's deep, shadowed, smoky city.
-- Never run on real hardware: phone performance, a real controller, the Electron/Steam build.
-- No music. Balance tuned only by bots.
+## Premise check (ZaneGPT)
+$10 is earned, not chosen. Brain's price card: price bands are correlation — pricier games carry
+more content — so match the band your content and hook support. Comparable: RIOT: Civil Unrest,
+$19.99, 68% positive, both sides, includes Paris.
+- Hook (passes Brain's "core mechanic, not theme" test): a crowd you steer as a fluid — goals,
+  pressure, gaps — not units you click, playable from both sides.
+- Content (fails today): ~1 hour of campaign + sandbox. Target: 3+ hours for $10.
+- Polish (partial): mechanics are there; feel, look and sound are thin.
+- Hidden assumptions: players like both sides equally; the political theme is a store risk;
+  balance is bot-tuned only.
+- What would prove $10 wrong: playtesters finish in under an hour, or say "short".
+Wishlist math (Brain): at ~$10, 10,000 wishlists ≈ 1,000–1,500 week-one sales ≈ $7–10k net.
 
-## Brain inputs
-- The trailer must not stray from the game; capture real gameplay through test hooks.
-- Breakouts change a core mechanic, not the theme; theme alone is not a hook.
-- Wishlist math: week-one sales ~0.10-0.15x launch wishlists; Popular Upcoming needs ~7-10k.
-- Price from band data: $5-9.99 reached 1k reviews 14.3% vs 8.7% under $5 (other genre).
-- A system nothing on screen points at scores like one that does not exist.
-- WebGL/worker contexts must be released or browsers kill the oldest.
-- Open tension: does fast trailer pacing read on a phone-sized vertical ad?
+Each stage has a gate: it is done only when its checks pass.
 
-## Stages
-1. Scale engine: crowd sim in a Web Worker, WebGL agent renderer, level-of-detail for far crowds.
-   Target 100k at 30 fps desktop, 20k on a phone. Perf test in CI.
-2. Real hardware: owner plays on phone, controller and the Electron build; fix what breaks.
-3. Pompiers side: third playable role, two levels (fires, hydrants, trucks through crowds).
-4. Saturdays: campaign as weekly acts with carry-over (crowd mood, police budget) and a
-   "see you next Saturday" end card.
-5. Look and sound: building depth/shadows, heavier smoke, city-wide night glow, music loop.
-6. Steam kit: real-gameplay trailer cut from test hooks on the trailer's beats, capsule art,
-   demo build, store page, price decision.
+## Stage 1 — Look and feel  (approved)
+Juice the player's actions and payoffs, not the idle screen (Brain juice checklist):
+camera shake on fires and mortar hits, impact flashes, debris and scorch that stay, hit-stop on big
+moments, sound on every action. Buildings with visible height (walls, varied rooftops), heavier
+smoke, a night city that glows with every fire. Adaptive music that rises with the action.
+Gate: greyscale test — protesters, casseurs and police tell apart by brightness alone;
+frame time within 10% of today; before/after screenshots.
+
+## Stage 2 — Campaign to 3 hours
+7 → 16 levels in two arcs, alternating sides. New objective types: march a route, free
+arrested people, protect a street, evacuate before the charge. Difficulty Easy/Normal/Hard that
+tunes the opponent, not shared rules (Brain: shared-rule difficulty flips meaning per side).
+Gate: a bot completes every level; estimated play 3+ hours; every level has a 3-star target.
+
+## Stage 3 — Replay modes
+Challenge of the day (seeded city, score), Endless night (survive waves, score), sandbox presets.
+Local best scores.
+Gate: seeds validated (reachability + diversity metrics); scores reproducible per seed.
+
+## Stage 4 — Unlocks
+Cities styles, flag colours, police units and protest banners unlocked by stars and
+achievements; 20 Steam achievements.
+Gate: every unlock reachable; stored as flags in the save, appearance derived from them.
+
+## Stage 5 — Playtest gate
+5 outside players. Local playtime log per level, quits, retries; fix the top issues.
+Gate: median campaign time 3+ hours; nobody stuck on a level with no idea why.
+
+## Stage 6 — Steam kit
+Windows build verified, Steamworks achievements + cloud saves, store page, capsule art,
+a trailer cut from real gameplay on the source trailer's beats (Brain: never stray from the game),
+demo of the first levels out before Next Fest, Coming Soon page as early as possible, price $9.99.
+Gate: build runs from Steam; demo live; trailer is 100% real footage.
+
+## Later
+Play the pompiers (third side). Bigger crowds (worker thread + WebGL).
