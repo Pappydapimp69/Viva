@@ -614,14 +614,20 @@
     }
     return false;
   }
-  let modalSeen = null, modalAt = 0, navLatch = false;
+  let modalSeen = null, modalAt = 0, navLatch = false, latchNeutral = 0;
   function menuPad() {
     // a panel that pops up mid-play ignores input held over from the game for a moment
     const m = modalEl();
-    if (m !== modalSeen) { modalSeen = m; modalAt = performance.now(); navLatch = !!m; }
+    if (m !== modalSeen) { modalSeen = m; modalAt = performance.now(); navLatch = !!m; latchNeutral = 0; }
     if (m && performance.now() - modalAt < 600) { if (!padFocus || !focusables().includes(padFocus)) setFocus(defaultFocus(focusables())); return; }
     // a stick or D-pad still held from play must be let go once before it moves the panel's focus
-    if (navLatch) { if (pad.navDir === null) navLatch = false; else pad.nav = null; }
+    // release only after 100 ms of continuous neutral: a stick springing back can bounce past centre
+    // and cross the other way (Brain training, 2026-10-31: a plain latch broke on a double spring-back)
+    if (navLatch) {
+      if (pad.navDir === null) { latchNeutral = latchNeutral || performance.now(); if (performance.now() - latchNeutral >= 100) navLatch = false; }
+      else latchNeutral = 0;
+      if (navLatch) pad.nav = null;
+    }
     const list = focusables();
     // the first input on a screen only lands focus; it doesn't also move it
     if (!padFocus || !list.includes(padFocus)) { setFocus(defaultFocus(list)); return; }

@@ -116,6 +116,12 @@ const path = require('path');
   await p.evaluate(() => { __pad.axes = [-0.95, 0, 0, 0]; }); await p.waitForTimeout(300);
   await p.evaluate(() => { const t = PAVE.debug.tut; t.i = t.steps.length - 1; t.next(); }); await p.waitForTimeout(1500);
   ok(await p.evaluate(() => PAVE.debug.padFocus && PAVE.debug.padFocus.id) === 'tutCampaign', 'stick held through a pop-up does not move its focus');
+  // released stick springs back past centre and crosses the other way: still no move
+  await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(40);
+  await p.evaluate(() => { __pad.axes = [0.6, 0, 0, 0]; }); await p.waitForTimeout(60);
+  await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(40);
+  await p.evaluate(() => { __pad.axes = [0.55, 0, 0, 0]; }); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => PAVE.debug.padFocus && PAVE.debug.padFocus.id) === 'tutCampaign', 'a spring-back bounce does not move focus either');
   await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(200);
   await p.evaluate(() => { __pad.axes = [-0.95, 0, 0, 0]; }); await p.waitForTimeout(200); await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(200);
   ok(await p.evaluate(() => PAVE.debug.padFocus && PAVE.debug.padFocus.id) === 'tutStay', 'a fresh push does move it');
