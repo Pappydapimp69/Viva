@@ -11,7 +11,7 @@
     get(k, d) { try { const v = localStorage.getItem('pave.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('pave.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
   };
-  const settings = Object.assign({ vol: 0.7, music: 0.6, crowd: 1, edge: false, fps: false, full: false, safe: 0 }, store.get('settings', {}));
+  const settings = Object.assign({ vol: 0.7, music: 0.6, crowd: 1, edge: false, fps: false, full: false, safe: 0, playtest: /[?&]playtest/.test(location.search) }, store.get('settings', {}));
   const applySafe = () => document.documentElement.style.setProperty('--safe', String(settings.safe || 0));
   applySafe();
   const progress = Object.assign({ unlocked: 1, stars: {}, ach: {}, tut: {} }, store.get('progress', {}));
@@ -50,6 +50,12 @@
   const cam = { x: 160, y: 160, zoom: 3, tz: 3 };
   let paused = true, speed = 1, acc = 0, last = performance.now(), hitStop = 0;
   let tool = null, selBloc = 0, selSquad = -1, tut = null;
+  // playtest recorder (?playtest, or Settings): reports survive reloads so a tester can copy them later
+  const ptest = new P.Playtest();
+  ptest.history = store.get('playtests', []);
+  const ptOn = () => settings.playtest || /[?&]playtest/.test(location.search);
+  let ptSel = '', ptRun = null;
+  const ptBuild = () => { const v = document.getElementById('ver'); const m = v && v.parentNode.textContent.match(/v(\S+).*?(build \w+)?/); return m ? 'v' + m[1] + (v.parentNode.textContent.match(/build \w+/) || [''])[0].replace('build', ' build') : ''; };
   let mouse = { x: 0, y: 0, wx: 0, wy: 0, down: false, mid: false, drag: null, lastX: 0, lastY: 0 };
   const keys = {};
   let captionT = 0, shownCaptions = {};
@@ -177,12 +183,14 @@
     $('setVol').value = settings.vol; $('setCrowd').value = String(settings.crowd);
     $('setSafe').value = settings.safe || 0;
     $('setMusic').value = settings.music;
+    $('setPlaytest').checked = ptOn();
     $('setEdge').checked = settings.edge; $('setFps').checked = settings.fps; $('setFull').checked = !!document.fullscreenElement;
   }
   $('setVol').oninput = (e) => { settings.vol = +e.target.value; audio.setVolume(settings.vol); saveSettings(); };
   $('setMusic').oninput = (e) => { settings.music = +e.target.value; audio.setMusic(settings.music); saveSettings(); };
   $('setSafe').oninput = (e) => { settings.safe = +e.target.value; applySafe(); saveSettings(); };
   $('setCrowd').onchange = (e) => { settings.crowd = +e.target.value; saveSettings(); };
+  $('setPlaytest').onchange = (e) => { settings.playtest = e.target.checked; saveSettings(); };
   $('setEdge').onchange = (e) => { settings.edge = e.target.checked; saveSettings(); };
   $('setFps').onchange = (e) => { settings.fps = e.target.checked; saveSettings(); $('fps').textContent = ''; };
   $('setFull').onchange = (e) => {
@@ -199,6 +207,7 @@
       level = lv;
       world = new P.World(lv, { crowdScale: sandbox ? 1 : settings.crowd, maxAgents: 140000 });
       R.setWorld(world);
+      if (ptOn() && !lv.tutorial) ptest.begin(world, lv, lastInput); else ptest.run = null;
       chat = new P.Chat($('chatLog'), world.side, world.map);
       $('chatLog').innerHTML = '';
       const prot = world.side === S.PROTEST;
@@ -268,9 +277,10 @@
   }
   function captionOnce(key, a, b) { if (shownCaptions[key]) return; shownCaptions[key] = 1; caption(a, b, 2.6); }
   let tipT = 0;
-  function tip(text) {
+  function tip(text, info) {
     if (lastInput === 'pad') text = text.replace(/^Drag/, 'Hold A and move').replace(/right-click/g, 'press B').replace(/^Click/, 'Press A').replace(/click/g, 'select');
-    $('tip').textContent = text; $('tip').classList.add('show'); tipT = 2.2; }
+    $('tip').textContent = text; $('tip').classList.add('show'); tipT = 2.2;
+    if (world && !info) ptest.reject(world, text.replace(/ \(.*\)$/, '')); }
 
   // ------------------------------------------------------------ tools
   const PROT_TOOLS = [
@@ -308,9 +318,10 @@
     const t = tools().find((x) => x.id === id);
     if (!t) return;
     audio.play('ui');
-    if (id === 'mobilise' || id === 'reinforce') { useInstant(t); return; }
+    if (world && id !== tool) ptest.count(world, 'tools');
+    if (id === 'mobilise' || id === 'reinforce') { useInstant(t); if (world) ptest.order(world, id, 0, 0, null, lastInput); return; }
     tool = id;
-    tip(t.hint);
+    tip(t.hint, true);
   }
   function useInstant(t) {
     if ((world.cooldowns[t.id] || 0) > 0) return tip('Recharging…');
@@ -320,10 +331,10 @@
       const n = world.spawnProtesters(800, false);
       world.emit('mobilise', { x: world.spawnEntries[0].x, y: world.spawnEntries[0].y });
       chat.me('tout le monde à ' + (world.blocs[selBloc].target >= 0 ? world.map.landmarks[world.blocs[selBloc].target].name : 'la manif') + ' 📣');
-      tip('+' + n + ' protesters on the way');
+      tip('+' + n + ' protesters on the way', true);
     } else if (t.id === 'reinforce') {
       const sq = world.addSquad(world.squadSize);
-      if (sq) { buildSquadBar(); selSquad = sq.id; tip(sq.name + ' deployed'); }
+      if (sq) { buildSquadBar(); selSquad = sq.id; tip(sq.name + ' deployed', true); }
     }
   }
 
@@ -396,6 +407,7 @@
         if (!onTruck) for (const lm of map.landmarks) if (Math.hypot(lm.x - wx, lm.y - wy) < lm.r + 3) { lmId = lm.id; wx = lm.x; wy = lm.y; }
         world.setBlocTarget(selBloc, wx, wy, lmId);
         world.blocs[selBloc].truck = onTruck; // a bloc sent at a fire truck follows it
+        ptest.order(world, 'march', wx, wy, { bloc: selBloc }, lastInput);
         audio.play('order');
         const name = lmId != null ? map.landmarks[lmId].name : map.streetAt(wx, wy);
         chat.me((world.blocs.length > 1 ? 'bloc ' + 'ABC'[selBloc] + ' → ' : 'on va ') + name + ' ✊');
@@ -404,7 +416,7 @@
       case 'casseurs': {
         const n = world.convertCasseurs(wx, wy, 8, 20);
         if (!n) return tip('No protesters there');
-        spend(t.cost); audio.play('ui');
+        spend(t.cost); audio.play('ui'); ptest.order(world, 'casseurs', wx, wy, null, lastInput);
         captionOnce('cass', 'HOODS', 'UP');
         break;
       }
@@ -412,7 +424,7 @@
         const i = nearestAgent(wx, wy, (k) => k !== K.POL, 40);
         if (i < 0) return tip('Nobody close enough to launch');
         world.launchFireworks(world.crowd.x[i], world.crowd.y[i], wx, wy);
-        spend(t.cost); world.cooldowns.fireworks = t.cd;
+        spend(t.cost); world.cooldowns.fireworks = t.cd; ptest.order(world, 'fireworks', wx, wy, null, lastInput);
         audio.play('firework', camDist(wx, wy));
         captionOnce('fw', 'MORTARS', 'LAUNCHED');
         break;
@@ -437,7 +449,7 @@
         const sq = world.squads[selSquad] || world.squads.reduce((a, s) => (Math.hypot(s.ax - wx, s.ay - wy) < Math.hypot(a.ax - wx, a.ay - wy) ? s : a));
         if (Math.hypot(sq.ax - wx, sq.ay - wy) > 40) return tip(sq.name + ' is too far (40 m)');
         world.throwGas(sq.ax, sq.ay, wx, wy);
-        spend(t.cost); world.cooldowns.gas = t.cd;
+        spend(t.cost); world.cooldowns.gas = t.cd; ptest.order(world, 'gas', wx, wy, null, lastInput);
         audio.play('gas', camDist(wx, wy));
         captionOnce('gas', 'TEAR', 'GAS');
         break;
@@ -446,7 +458,7 @@
         const c = nearestBurning(wx, wy, 10);
         if (!c) return tip('Click a burning car');
         if (world.trucksOut >= world.trucksMax) return tip('All trucks are out (' + world.trucksMax + ')');
-        if (world.dispatchTruck(c)) { spend(t.cost); audio.play('order'); captionOnce('pomp', 'TRUCK', 'ROLLING'); }
+        if (world.dispatchTruck(c)) { spend(t.cost); audio.play('order'); ptest.order(world, 'truck', wx, wy, null, lastInput); captionOnce('pomp', 'TRUCK', 'ROLLING'); }
         else tip('No road to that fire');
         break;
       }
@@ -456,7 +468,7 @@
     const sq = world.squads[selSquad];
     if (!sq) return tip('Select a squad (click one, or 1–9)');
     if (charge) { if (world.authority < 5) return tip('Not enough authority'); world.authority -= 5; }
-    if (world.orderSquad(sq, wx, wy, charge)) { audio.play('order'); if (!charge) captionOnce('line', 'LINE', 'FORMED'); }
+    if (world.orderSquad(sq, wx, wy, charge)) { audio.play('order'); ptest.order(world, charge ? 'charge' : 'line', wx, wy, { squad: selSquad }, lastInput); if (!charge) captionOnce('line', 'LINE', 'FORMED'); }
   }
   function camDist(x, y) { return Math.hypot(x - cam.x, y - cam.y) * (3 / cam.zoom); }
 
@@ -552,6 +564,7 @@
   function togglePause() {
     if (!world || world.result) return;
     paused = !paused;
+    if (paused) ptest.count(world, 'pauses');
     $('psSkipTut').classList.toggle('hidden', !(tut && !tut.finished));
     if (paused) show('pauseMenu'); else hideScreens();
   }
@@ -729,7 +742,7 @@
     if (pad.pressed(PB.A)) {
       audio.init();
       if (tool === 'barricade' || tool === 'barrier') mouse.drag = { x: c.x, y: c.y };
-      else if (padSnap && padSnap.kind === 'squad' && tool === 'move') { selSquad = padSnap.ref; audio.play('ui'); tip(world.squads[selSquad].name + ' selected — move and press A to place the line'); }
+      else if (padSnap && padSnap.kind === 'squad' && tool === 'move') { selSquad = padSnap.ref; audio.play('ui'); tip(world.squads[selSquad].name + ' selected — move and press A to place the line', true); }
       else primary(w.x, w.y);
     }
     if (pad.released(PB.A) && mouse.drag) { placeLine(mouse.drag, c); mouse.drag = null; }
@@ -884,7 +897,9 @@
   $('psRestart').onclick = () => { paused = true; start(level, levelIdx < 0); };
   $('psQuit').onclick = () => quitToMenu();
   $('psSkipTut').onclick = () => { if (tut) { tut.destroy(); tut = null; } $('tutorial').classList.add('hidden'); togglePause(); };
-  function quitToMenu() { if (tut) { tut.destroy(); tut = null; } $('tutorial').classList.add('hidden'); world = null; paused = true; $('hud').classList.add('hidden'); show('mainMenu'); }
+  function quitToMenu() {
+    if (world && ptest.run && !world.result) { ptest.finish(world, { quit: true }); store.set('playtests', ptest.history); }
+    if (tut) { tut.destroy(); tut = null; } $('tutorial').classList.add('hidden'); world = null; paused = true; $('hud').classList.add('hidden'); show('mainMenu'); }
 
   // ------------------------------------------------------------ overlay (world space)
   const overlay = (g, z) => {
@@ -978,12 +993,12 @@
         case 'fireworks': if (world.side === S.POLICE) audio.play('firework', camDist(e.x, e.y)); break;
         case 'burst':
           if (e.hit > 20) captionOnce('fw', 'MORTARS', 'LAUNCHED');
-          if (e.injured && camDist(e.x, e.y) < 90) tip(e.injured + ' officer' + (e.injured > 1 ? 's' : '') + ' injured');
+          if (e.injured && camDist(e.x, e.y) < 90) tip(e.injured + ' officer' + (e.injured > 1 ? 's' : '') + ' injured', true);
           break;
         case 'charge': if (world.side === S.PROTEST && camDist(e.x, e.y) < 80) captionOnce('charge', 'THE', 'CHARGE'); break;
         case 'extinguished': if (world.stats.extinguished >= 25) unlock('POMPIER'); break;
         case 'truckSurrounded':
-          if (world.side === S.POLICE) { captionOnce('pin', 'TRUCK', 'SURROUNDED'); tip('A fire truck is pinned — charge or gas the crowd around it'); }
+          if (world.side === S.POLICE) { captionOnce('pin', 'TRUCK', 'SURROUNDED'); tip('A fire truck is pinned — charge or gas the crowd around it', true); }
           else captionOnce('pin', 'TRUCK', 'PINNED');
           break;
         case 'truckAbandoned':
@@ -1019,10 +1034,31 @@
       if (P.LEVELS.every((l) => (progress.stars[l.id] || 0) >= 3)) unlock('ALL3');
     }
     $('endNext').classList.toggle('hidden', !(r.win && isCampaign && levelIdx + 1 < P.LEVELS.length));
+    ptRun = ptest.run ? ptest.finish(world, r) : null;
+    if (ptRun) { ptRun.survey = {}; store.set('playtests', ptest.history); }
+    $('ptSurvey').classList.toggle('hidden', !ptRun);
+    $('ptNote').value = ''; $('ptOut').classList.add('hidden');
+    document.querySelectorAll('#ptSurvey .pts button').forEach((b) => b.classList.remove('on'));
     paused = true;
     setTimeout(() => show('endScreen'), 900);
   }
   $('endMenu').onclick = () => quitToMenu();
+  // playtest survey: two 1-5 ratings, a note, then copy the report (clipboard, or a box to copy by hand)
+  document.querySelectorAll('#ptSurvey .pts').forEach((row) => {
+    for (let v = 1; v <= 5; v++) {
+      const b = document.createElement('button'); b.textContent = v;
+      b.onclick = () => { if (!ptRun) return; ptRun.survey[row.dataset.q] = v; row.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); store.set('playtests', ptest.history); };
+      row.appendChild(b);
+    }
+  });
+  $('ptNote').oninput = () => { if (ptRun) { ptRun.survey.note = $('ptNote').value; store.set('playtests', ptest.history); } };
+  function copyText(text, box) {
+    box.value = text; box.classList.remove('hidden'); box.select();
+    try { if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => tip('Report copied — paste it to the dev', true), () => {}); } catch (e) { /* the box is there to copy by hand */ }
+  }
+  $('ptCopy').onclick = () => { if (ptRun) copyText(ptest.report(ptRun, ptBuild()), $('ptOut')); };
+  $('setPtCopy').onclick = () => copyText(ptest.history.map((r) => ptest.report(r, ptBuild())).join('\n\n') || 'No playtest reports yet.', $('setPtOut'));
+  $('setPtClear').onclick = () => { ptest.history.length = 0; store.set('playtests', []); tip('Playtest reports cleared', true); };
   $('endRetry').onclick = () => start(level, levelIdx < 0);
   $('endNext').onclick = () => brief(levelIdx + 1);
 
@@ -1148,6 +1184,11 @@
       while (acc >= P.SIM_DT && steps < 3 * speed) { world.tick(P.SIM_DT); acc -= P.SIM_DT; steps++; }
       if (steps >= 3 * speed) acc = 0; // can't keep up: drop time rather than spiral
       handleEvents();
+      if (ptest.run) {
+        ptest.update(world);
+        const sel = selBloc + ',' + selSquad;
+        if (sel !== ptSel) { if (ptSel) ptest.count(world, 'selects'); ptSel = sel; }
+      }
     }
     R.draw(cam, paused ? 0 : dt, { overlay });
     if (tut && !paused) { tut.update(dt); drawTutArrow(R.g); }

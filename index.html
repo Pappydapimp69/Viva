@@ -119,6 +119,9 @@
       <label>Show FPS <input id="setFps" type="checkbox"></label>
       <label>Fullscreen <input id="setFull" type="checkbox"></label>
       <label>Controller <span id="padStatus">None</span></label>
+      <label>Playtest recorder <input id="setPlaytest" type="checkbox"></label>
+      <div class="row"><button id="setPtCopy">COPY PLAYTEST REPORTS</button><button id="setPtClear">CLEAR</button></div>
+      <textarea id="setPtOut" class="hidden" rows="6" readonly></textarea>
     </div>
     <button data-go="back" class="back">← BACK</button>
   </div>
@@ -179,6 +182,13 @@
       <div id="endStars"></div>
       <p id="endWhy"></p>
       <div id="endStats"></div>
+      <div id="ptSurvey" class="hidden">
+        <div class="ptq">Orders did what I meant <span class="pts" data-q="orders"></span></div>
+        <div class="ptq">I could tell what was happening <span class="pts" data-q="clear"></span></div>
+        <textarea id="ptNote" rows="2" placeholder="What confused or annoyed you? (optional)"></textarea>
+        <button id="ptCopy">COPY PLAYTEST REPORT</button>
+        <textarea id="ptOut" class="hidden" rows="5" readonly></textarea>
+      </div>
       <div class="row"><button id="endMenu" class="back">MENU</button><button id="endRetry">RETRY</button><button id="endNext" class="big">NEXT</button></div>
     </div>
   </div>
@@ -202,6 +212,7 @@
 <script src="src/chat.js"></script>
 <script src="src/gamepad.js"></script>
 <script src="src/tutorial.js"></script>
+<script src="src/playtest.js"></script>
 <script src="src/main.js"></script>
 </body>
 </html>

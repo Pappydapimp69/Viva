@@ -281,3 +281,15 @@ body.compact.portrait #topCenter #timer { display: none; }
 
 /* desktop: the coach panel stays between the side panels */
 body:not(.compact) #tutorial { width: min(520px, calc(100vw - 600px)); }
+
+/* playtest survey on the end card */
+#ptSurvey { display: flex; flex-direction: column; gap: 8px; width: 100%; font-size: 14px; }
+#ptSurvey.hidden { display: none; }
+.ptq { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; text-align: left; }
+.pts { display: inline-flex; gap: 4px; }
+.pts button { min-width: 34px; padding: 4px 0; }
+.pts button.on { background: var(--y); color: #111; }
+#ptNote, #ptOut, #setPtOut { width: 100%; box-sizing: border-box; font: 13px/1.35 monospace; background: #0c0d0f; color: #ddd; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+/* a card taller than a landscape phone scrolls from its top instead of losing it above the screen */
+#endScreen { justify-content: safe center; overflow-y: auto; }
+#endScreen .card { flex-shrink: 0; margin: 8px 0; }
