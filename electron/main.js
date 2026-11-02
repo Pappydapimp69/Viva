@@ -7,7 +7,7 @@ try {
   // steam_appid.txt next to the exe holds the real App ID once Valve assigns one.
   const id = Number(require('fs').readFileSync(path.join(__dirname, '..', 'steam_appid.txt'), 'utf8').trim()) || 480;
   steam = require('steamworks.js').init(id);
-} catch (e) { steam = null; /* running outside Steam: achievements stay local */ }
+} catch (e) { steam = null; console.warn('[steam] init failed, achievements stay local until next launch:', e && e.message); }
 
 function createWindow() {
   const win = new BrowserWindow({

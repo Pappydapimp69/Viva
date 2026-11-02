@@ -61,6 +61,36 @@ test('a fire truck puts a fire out', () => {
   assert.ok(c.burn < 55, 'put out before burning out');
 });
 
+test('a fire truck cut off for 6 s waits, re-plans when the streets change, and still puts the fire out', () => {
+  const w = new P.World(P.LEVELS[3], {});
+  const c = w.map.cars.find((c) => c.near.length === 0) || w.map.cars[0];
+  w.ignite(c.id, 'test');
+  assert.ok(w.dispatchTruck(c));
+  const tr = w.trucks.find((t) => t.car === c.id);
+  for (let i = 0; i < 10; i++) w.updateTrucks(P.SIM_DT);
+  // close every street to the truck: its field reads unreachable until the map changes again
+  tr.field.compute = function () { this.dist.fill(P.INF); };
+  tr.field.compute();
+  for (let t = 0; t < 6; t += P.SIM_DT) w.updateTrucks(P.SIM_DT);
+  assert.ok(!tr.done && tr.state === 'go', 'still waiting after 6 s (state ' + tr.state + ')');
+  delete tr.field.compute; // streets reopen
+  w.map.version++;
+  for (let i = 0; i < 30 * 60 && c.state === 1; i++) { w.updateTrucks(P.SIM_DT); w.updateFires(P.SIM_DT); }
+  assert.strictEqual(c.state, 2, 'fire put out after the block cleared');
+});
+
+test('a fire truck cut off for good gives up and goes home', () => {
+  const w = new P.World(P.LEVELS[3], {});
+  const c = w.map.cars.find((c) => c.near.length === 0) || w.map.cars[0];
+  w.ignite(c.id, 'test');
+  assert.ok(w.dispatchTruck(c));
+  const tr = w.trucks.find((t) => t.car === c.id);
+  tr.field.compute = function () { this.dist.fill(P.INF); };
+  tr.field.compute();
+  for (let t = 0; t < P.TRUCK_GIVEUP_S + 1; t += P.SIM_DT) { w.map.version++; w.updateTrucks(P.SIM_DT); }
+  assert.ok(tr.done, 'gave up');
+});
+
 test('police line forms across the street, at any street angle', () => {
   const w = new P.World(P.LEVELS[2], {});
   const sq = w.squads[0], m = w.map;

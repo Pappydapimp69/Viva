@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/sim.test.js",
+    "test": "node --test test/*.test.js",
     "smoke": "node test/smoke.js",
     "bench": "node tools/bench.js",
     "build:web": "node tools/build-web.js",

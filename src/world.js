@@ -554,11 +554,14 @@
         const tc = tr.state === 'go' ? cars[tr.car] : null;
         if (tc && (Math.hypot(tc.cx - tr.x, tc.cy - tr.y) < 8 || d <= 20)) { tr.state = 'spray'; continue; }
         if (tr.state === 'back' && d <= 25) { tr.done = true; continue; }
-        if (d === P.INF) { // cut off: re-route
+        if (d === P.INF) { // cut off: hold, re-plan whenever the streets change, give up only after a long block
+          // (Brain viva truck-goal v2: a 4 s give-up sent 98% of trucks home on a 6 s block)
+          if (tr.hv !== map.version) { tr.hv = map.version; tr.field.compute(); }
           tr.stuck = (tr.stuck || 0) + dt;
-          if (tr.stuck > 4) { tr.state = 'back'; tr.done = true; }
+          if (tr.stuck > P.TRUCK_GIVEUP_S) { tr.state = 'back'; tr.done = true; }
           continue;
         }
+        tr.stuck = 0;
         const ci = (ty >> 2) * CW + (tx >> 2);
         // people in the way slow the truck; a full ring of them stops it dead
         const crowded = (this.densP[ci] > 14 ? 0.35 : 1) * Math.max(0, 1 - press / need);
@@ -812,5 +815,12 @@
   P.TRUCK_SURROUND = 16;   // crowd press (casseurs x2) that pins a truck
   P.TRUCK_ABANDON_S = 5;   // seconds pinned before the crew walks away
   P.TRUCK_RECOVER_S = 8;   // seconds clear before the crew returns
+  // the two extra-star conditions, in words (shown on the briefing and the end card; mirrors finish())
+  P.starRules = function (lv) {
+    if (lv.side === P.SIDE.PROTEST) return ['★★ win with over ' + P.fmtTime(lv.time * 0.25) + ' left', '★★★ win with over ' + P.fmtTime(lv.time * 0.5) + ' left'];
+    const lim = lv.starBurn || 20;
+    return ['★★ win with fewer than ' + lim + ' cars burned', '★★★ win with fewer than ' + Math.ceil(lim / 2) + ' cars burned'];
+  };
+  P.TRUCK_GIVEUP_S = 20;   // seconds cut off before a truck gives up (re-plans on every street change meanwhile)
   P.World = World;
 })();

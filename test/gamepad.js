@@ -125,6 +125,18 @@ const path = require('path');
   await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(200);
   await p.evaluate(() => { __pad.axes = [-0.95, 0, 0, 0]; }); await p.waitForTimeout(200); await p.evaluate(() => { __pad.axes = [0, 0, 0, 0]; }); await p.waitForTimeout(200);
   ok(await p.evaluate(() => PAVE.debug.padFocus && PAVE.debug.padFocus.id) === 'tutStay', 'a fresh push does move it');
+  // a fresh, deliberate press soon after a pop-up opens goes through (the grace only swallows mashing)
+  await p.evaluate(() => PAVE.debug.startTutorial('protest'));
+  await p.waitForFunction(() => PAVE.debug.tut && PAVE.debug.screen === null, null, { timeout: 15000 });
+  await p.waitForTimeout(1200); // idle in play: no buttons pressed
+  await p.evaluate(() => { const t = PAVE.debug.tut; t.i = t.steps.length - 1; t.next(); });
+  await p.waitForFunction(() => PAVE.debug.padFocus && PAVE.debug.padFocus.id === 'tutCampaign', null, { timeout: 3000 });
+  await p.waitForTimeout(200);
+  const before = await p.evaluate(() => PAVE.debug.screen);
+  await tap(0);
+  await p.waitForTimeout(150);
+  const after = await p.evaluate(() => PAVE.debug.screen);
+  ok(after !== before, 'a fresh A within 600 ms of a pop-up is not eaten (screen ' + before + ' -> ' + after + ')');
   ok(errs.length === 0, 'no page errors ' + errs.join(' | '));
   await b.close();
 })();

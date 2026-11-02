@@ -1,7 +1,7 @@
 # PAVÉ — Paris Riot Manager
 
 A top-down crowd-physics strategy game: one city, up to 100,000 simulated people, two sides.
-Lead the manif, or command the CRS. Target price on Steam: **$4.99**.
+Lead the manif, or command the CRS. Target price on Steam: **$9.99** — gated on the content bar in [docs/NEXT_BUILD.md](docs/NEXT_BUILD.md).
 
 **Play in the browser:** GitHub Pages (deployed by `.github/workflows/pages.yml`).
 

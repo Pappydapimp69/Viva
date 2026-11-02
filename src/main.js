@@ -39,6 +39,10 @@
     setTimeout(() => t.classList.remove('show'), 4200);
   }
 
+  // re-send every unlocked achievement at boot: one earned while Steam was down would otherwise never reach it
+  // (activate is idempotent on Steam's side)
+  try { if (globalThis.steam && globalThis.steam.activate) for (const id in progress.ach) globalThis.steam.activate(id); } catch (e) { /* no steam */ }
+
   // ------------------------------------------------------------ state
   const canvas = $('view');
   const R = new P.Renderer(canvas);
@@ -126,7 +130,8 @@
     $('brSide').style.color = lv.side === S.PROTEST ? '#ff8a5b' : '#7fb0ff';
     $('brName').textContent = lv.name;
     $('brText').textContent = lv.brief;
-    $('brObj').innerHTML = lv.objectives.map((o) => '<li>▸ ' + o.label + '</li>').join('') + `<li style="color:#aaa">⏱ ${P.fmtTime(lv.time)}</li>`;
+    $('brObj').innerHTML = lv.objectives.map((o) => '<li>▸ ' + o.label + '</li>').join('') + `<li style="color:#aaa">⏱ ${P.fmtTime(lv.time)}</li>`
+      + P.starRules(lv).map((t) => `<li style="color:#ffd21f">${t}</li>`).join('');
     $('brTut').classList.toggle('hidden', !!progress.tut[lv.side]);
     $('brTut').dataset.go = lv.side === S.PROTEST ? 'tutProtest' : 'tutPolice';
     $('brTut').textContent = 'NEW HERE? ' + (lv.side === S.PROTEST ? 'PROTEST' : 'POLICE') + ' TUTORIAL FIRST';
@@ -614,12 +619,17 @@
     }
     return false;
   }
-  let modalSeen = null, modalAt = 0, navLatch = false, latchNeutral = 0;
+  let modalSeen = null, modalAt = 0, navLatch = false, latchNeutral = 0, lastPlayPress = -1e9;
   function menuPad() {
     // a panel that pops up mid-play ignores input held over from the game for a moment
     const m = modalEl();
     if (m !== modalSeen) { modalSeen = m; modalAt = performance.now(); navLatch = !!m; latchNeutral = 0; }
-    if (m && performance.now() - modalAt < 600) { if (!padFocus || !focusables().includes(padFocus)) setFocus(defaultFocus(focusables())); return; }
+    if (m && performance.now() - modalAt < 600) {
+      if (!padFocus || !focusables().includes(padFocus)) setFocus(defaultFocus(focusables()));
+      // swallow presses only in the opening frames, or while the player was still mashing buttons in play;
+      // a fresh, deliberate press goes through (Brain viva latch-dwell sweep: the flat 600 ms ate them)
+      if (performance.now() - modalAt < 150 || modalAt - lastPlayPress < 600) return;
+    }
     // a stick or D-pad still held from play must be let go once before it moves the panel's focus
     // release only after 100 ms of continuous neutral: a stick springing back can bounce past centre
     // and cross the other way (Brain training, 2026-10-31: a plain latch broke on a double spring-back)
@@ -629,7 +639,7 @@
       if (navLatch) pad.nav = null;
     }
     const list = focusables();
-    // the first input on a screen only lands focus; it doesn't also move it
+    // the first input on a menu screen only lands focus; it doesn't also move it (pop-ups land it in the grace above)
     if (!padFocus || !list.includes(padFocus)) { setFocus(defaultFocus(list)); return; }
     if (pad.nav) {
       if ((pad.nav === 'left' || pad.nav === 'right') && padFocus && adjust(padFocus, pad.nav === 'left' ? -1 : 1)) audio.play('ui');
@@ -780,6 +790,7 @@
     if (!pad.connected) return;
     if (current || modal) { if (on) menuPad(); }
     else if (world) {
+      for (let i = 0; i < 17; i++) if (pad.pressed(i)) { lastPlayPress = performance.now(); break; }
       gamePad(dt);
       $('padCursor').style.transform = `translate(${padCur.x}px, ${padCur.y}px)`;
       $('padLabel').style.transform = `translate(${padCur.x}px, ${padCur.y + 26}px) translateX(-50%)`;
@@ -991,7 +1002,7 @@
     $('endTitle').textContent = r.win ? (world.side === S.PROTEST ? 'VICTOIRE !' : 'ORDRE RÉTABLI') : 'DÉFAITE';
     $('endTitle').style.color = r.win ? '#ffd21f' : '#ff6b5b';
     $('endStars').textContent = '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars);
-    $('endWhy').textContent = r.why;
+    $('endWhy').textContent = r.why + (r.win && r.stars < 3 ? ' — next: ' + P.starRules(world.level)[r.stars - 1] : '');
     $('endStats').innerHTML = [['Cars burned', st.burned], ['Arrests', st.arrests], ['Peak crowd', P.fmtNum(st.peak)],
       ['Landmarks taken', st.captures], ['Officers injured', st.injured || 0], ['Tear gas', st.gasUsed], ['Fireworks', st.fireworks], ['Fires put out', st.extinguished],
       ['Time', P.fmtTime(r.time)]].map(([a, b]) => `<div>${a}<b>${b}</b></div>`).join('');
