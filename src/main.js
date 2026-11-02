@@ -1069,6 +1069,17 @@
   $('endRetry').onclick = () => start(level, levelIdx < 0);
   $('endNext').onclick = () => brief(levelIdx + 1);
 
+  // a square's row under a capture objective: bar, % and the one thing to know (ETA, or what is stopping it)
+  const SQ_WHY = { taking: '', outnumbered: 'need 4× the police', police: 'police hold it', few: 'need 25+ people', empty: 'nobody there' };
+  function squareRow(q) {
+    const t = (s) => (s >= 60 ? Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0') : Math.round(s) + 's');
+    let note;
+    if (q.held) note = q.eta > 0 ? '▼ police retaking · ' + t(q.eta) : '✔ held';
+    else if (q.why === 'taking') note = '▲ ' + t(q.eta);
+    else note = (q.pct > 0 ? '▼ ' : '') + SQ_WHY[q.why];
+    const cls = q.held ? (q.eta > 0 ? 'warn' : 'held') : q.why === 'taking' ? 'up' : q.pct > 0 ? 'warn' : '';
+    return `<li class="sqp ${cls}"><span>${q.name}</span><i><u style="width:${q.pct}%"></u></i><em>${q.held ? '' : q.pct + '% '}${note}</em></li>`;
+  }
   function updateHUD() {
     const w = world;
     $('carsN').textContent = w.stats.burned;
@@ -1103,7 +1114,8 @@
     $('cCass').textContent = P.fmtNum(w.cassCount);
     $('cPol').textContent = P.fmtNum(w.polCount);
     $('cArr').textContent = w.stats.arrests;
-    $('objList').innerHTML = w.objectives.map((o) => `<li class="${o.done ? 'done' : o.failed ? 'failed' : ''}"><span>${o.done ? '✔' : '▸'} ${o.label}</span><b>${o.progress}</b></li>`).join('');
+    $('objList').innerHTML = w.objectives.map((o) => `<li class="${o.done ? 'done' : o.failed ? 'failed' : ''}"><span>${o.done ? '✔' : '▸'} ${o.label}</span><b>${o.progress}</b></li>`
+      + (o.squares && !o.done ? o.squares.slice(0, 4).map(squareRow).join('') : '')).join('');
     for (const t of tools()) {
       const el = $('tool_' + t.id); if (!el) continue;
       el.classList.toggle('active', tool === t.id);

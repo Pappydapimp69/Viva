@@ -293,3 +293,14 @@ body:not(.compact) #tutorial { width: min(520px, calc(100vw - 600px)); }
 /* a card taller than a landscape phone scrolls from its top instead of losing it above the screen */
 #endScreen { justify-content: safe center; overflow-y: auto; }
 #endScreen .card { flex-shrink: 0; margin: 8px 0; }
+
+/* per-square capture progress under a capture objective */
+#objList li.sqp { display: grid; grid-template-columns: minmax(0, 7.5em) 1fr auto; align-items: center; gap: 6px; padding: 1px 0 1px 12px; font-size: 12px; color: #ccc; }
+#objList li.sqp span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#objList li.sqp i { height: 6px; background: rgba(80,140,255,.35); border-radius: 3px; overflow: hidden; min-width: 40px; }
+#objList li.sqp u { display: block; height: 100%; background: #ff5a32; }
+#objList li.sqp em { font-style: normal; white-space: nowrap; color: #aaa; }
+#objList li.sqp.up em { color: var(--y); }
+#objList li.sqp.held em { color: #7dff9a; }
+#objList li.sqp.warn em { color: #ff9a7d; }
+body.compact #objList li.sqp { font-size: 9px; gap: 4px; padding-left: 6px; }

@@ -690,9 +690,11 @@
       lm.prot = prot; lm.pol = pol;
       const prev = lm.owner;
       lm.speed = 0;
-      if (prot > 25 && prot > pol * 4) { lm.speed = P.captureSpeed(prot, pol); lm.control += dt * 0.006 * (this.level.captureMul || 1) * lm.speed; }
-      else if (pol > 4 && pol * 4 >= prot) lm.control -= dt * 0.02 * Math.min(3, (pol * 4 + 1) / (prot + 10));
-      else lm.control += (lm.owner === 'protest' ? 0.004 : -0.004) * dt;
+      // lm.rate (control per second) and lm.why let the HUD show progress, an ETA, and what is stopping it
+      if (prot > 25 && prot > pol * 4) { lm.speed = P.captureSpeed(prot, pol); lm.rate = 0.006 * (this.level.captureMul || 1) * lm.speed; lm.why = 'taking'; }
+      else if (pol > 4 && pol * 4 >= prot) { lm.rate = -0.02 * Math.min(3, (pol * 4 + 1) / (prot + 10)); lm.why = prot > 25 ? 'outnumbered' : 'police'; }
+      else { lm.rate = lm.owner === 'protest' ? 0.004 : -0.004; lm.why = prot > 0 ? 'few' : 'empty'; }
+      lm.control += lm.rate * dt;
       lm.control = P.clamp(lm.control, -1, 1);
       if (lm.owner === 'police' && lm.control >= 1) lm.owner = 'protest';
       else if (lm.owner === 'protest' && lm.control <= 0) lm.owner = 'police';
@@ -753,12 +755,17 @@
         case 'burn': o.progress = Math.min(st.burned, o.n) + '/' + o.n; o.done = st.burned >= o.n; break;
         case 'capture': {
           const held = lms.filter((l) => l.owner === 'protest').length;
-          o.progress = held + '/' + o.n; o.done = held >= o.n; break;
+          o.progress = held + '/' + o.n; o.done = held >= o.n;
+          // closest to falling first, so the rows say where to push next
+          o.squares = lms.map(P.squareProgress).sort((a, b) => (b.held - a.held) || (b.pct - a.pct));
+          break;
         }
         case 'captureNamed': {
           const lm = lms[o.lm || 0];
           o.progress = lm.owner === 'protest' ? 'held' : Math.round(Math.max(0, lm.control) * 100) + '%';
-          o.done = lm.owner === 'protest'; break;
+          o.done = lm.owner === 'protest';
+          o.squares = [P.squareProgress(lm)];
+          break;
         }
         case 'arrest': o.progress = Math.min(st.arrests, o.n) + '/' + o.n; o.done = st.arrests >= o.n; break;
         case 'hold': {
@@ -850,6 +857,13 @@
     if (lv.side === P.SIDE.PROTEST) return ['★★ win with over ' + P.fmtTime(lv.time * 0.25) + ' left', '★★★ win with over ' + P.fmtTime(lv.time * 0.5) + ' left'];
     const lim = lv.starBurn || 20;
     return ['★★ win with fewer than ' + lim + ' cars burned', '★★★ win with fewer than ' + Math.ceil(lim / 2) + ' cars burned'];
+  };
+  // one square's capture state for the objective panel: % taken, seconds to go at the current rate, and why
+  P.squareProgress = function (lm) {
+    const held = lm.owner === 'protest', pct = held ? 100 : Math.round(Math.max(0, lm.control) * 100);
+    const rate = lm.rate || 0;
+    const eta = !held && rate > 0 ? (1 - lm.control) / rate : held && rate < 0 ? lm.control / -rate : -1;
+    return { name: lm.name, held, pct, eta, why: lm.why || 'empty', prot: lm.prot || 0, pol: lm.pol || 0, x: lm.x, y: lm.y };
   };
   P.MAX_BLOCS = 4;         // A-D: the most columns a protest can split into
   P.TRUCK_GIVEUP_S = 20;   // seconds cut off before a truck gives up (re-plans on every street change meanwhile)

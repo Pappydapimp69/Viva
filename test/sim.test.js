@@ -117,6 +117,19 @@ test('police levels and tutorials never split blocs', () => {
   }
 });
 
+test('capture objectives report per-square progress, an ETA while taking, and why it stalls', () => {
+  const w = new P.World(P.LEVELS[5], { crowdScale: 0.5 });
+  const o = w.objectives[0], lm = w.map.landmarks[0];
+  w.setBlocTarget(0, lm.x, lm.y, lm.id); w.setBlocTarget(1, lm.x, lm.y, lm.id);
+  let saw = null;
+  for (let s = 0; s * P.SIM_DT < 240 && !saw; s++) { w.tick(P.SIM_DT); const q = (o.squares || []).find((r) => r.name === lm.name); if (q && q.why === 'taking' && q.pct > 5) saw = q; }
+  assert.ok(o.squares.length === w.map.landmarks.length, 'one row per square');
+  assert.ok(saw, 'the targeted square shows as being taken');
+  assert.ok(saw.eta > 0 && saw.eta < 600, 'with a finite ETA (' + saw.eta + ')');
+  const empty = o.squares.find((r) => !r.held && r.prot === 0);
+  if (empty) assert.strictEqual(empty.why, 'empty');
+});
+
 test('police line forms across the street, at any street angle', () => {
   const w = new P.World(P.LEVELS[2], {});
   const sq = w.squads[0], m = w.map;
