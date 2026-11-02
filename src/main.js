@@ -359,11 +359,12 @@
   }
   function updateSquadBar() {
     if (world.side === S.PROTEST) {
+      if (world.blocs.length !== $('squadBar').children.length) buildSquadBar();
       world.blocs.forEach((b, i) => {
         const el = $('blc_' + i); if (!el) return;
         el.className = 'sq' + (i === selBloc ? ' sel' : '');
         const tgt = b.target >= 0 ? 'Pl. ' + world.map.landmarks[b.target].name : world.map.streetAt(b.tx, b.ty);
-        el.textContent = `${'ABC'[i]} · ${P.fmtNum(b.n)} → ${tgt}`;
+        el.textContent = `${'ABCD'[i]} · ${P.fmtNum(b.n)} → ${tgt}`;
       });
     } else {
       if (world.squads.length !== $('squadBar').children.length) buildSquadBar();
@@ -410,7 +411,7 @@
         ptest.order(world, 'march', wx, wy, { bloc: selBloc }, lastInput);
         audio.play('order');
         const name = lmId != null ? map.landmarks[lmId].name : map.streetAt(wx, wy);
-        chat.me((world.blocs.length > 1 ? 'bloc ' + 'ABC'[selBloc] + ' → ' : 'on va ') + name + ' ✊');
+        chat.me((world.blocs.length > 1 ? 'bloc ' + 'ABCD'[selBloc] + ' → ' : 'on va ') + name + ' ✊');
         break;
       }
       case 'casseurs': {
@@ -971,6 +972,12 @@
     if (!evs.length) return;
     for (const e of evs) {
       if (tut) tut.onEvent(e);
+      if (e.type === 'blocFormed') {
+        const L = 'ABCD'[e.id];
+        caption('BLOC ' + L, 'JOINS', 2.6); audio.play('order');
+        tip('The crowd has grown: bloc ' + L + ' (' + P.fmtNum(e.n) + ') is waiting for orders — ' + (lastInput === 'pad' ? 'Y' : lastInput === 'touch' ? 'tap ' + L + ' on the left' : 'Q or click ' + L), true);
+        if (chat) chat.post('on est trop nombreux, on se sépare — bloc ' + L + ' avec moi ✊', 'sarah');
+      }
       R.fxEvent(e);
       // juice the payoff, not the idle screen: shake falls off with distance from the camera
       const near = e.x != null ? Math.max(0, 1 - camDist(e.x, e.y) / 90) : 1;

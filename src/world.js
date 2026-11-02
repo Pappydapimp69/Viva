@@ -290,6 +290,35 @@
     return made;
   };
 
+  // The player's movement earns new blocs as it grows: each time the crowd reaches 2x, 3x, 4x what it
+  // started with, the rear half of the biggest bloc splits off as a new column, holding where it stands.
+  World.prototype.earnBlocs = function () {
+    if (this.side !== P.SIDE.PROTEST || this.level.tutorial || this.blocs.length >= P.MAX_BLOCS) return;
+    if (!this.blocBase) { if (this.time > 1 && this.protCount) this.blocBase = this.protCount; return; }
+    const earned = this.blocs.length - (this.level.blocs || 2) + 1; // blocs earned so far + 1
+    if (this.protCount < this.blocBase * (1 + earned)) return;
+    this.splitBloc();
+  };
+  World.prototype.splitBloc = function () {
+    const cr = this.crowd, blocs = this.blocs;
+    let big = blocs[0];
+    for (const b of blocs) if (b.n > big.n) big = b;
+    if (big.n < 200) return false;
+    // the rear half (farthest from where the big bloc is going) becomes the new column
+    const idx = [], dist = [];
+    for (let i = 0; i < cr.n; i++) if (cr.kind[i] !== K.POL && cr.grp[i] === big.id) { idx.push(i); dist.push(Math.hypot(cr.x[i] - big.tx, cr.y[i] - big.ty)); }
+    const cut = Float32Array.from(dist).sort()[idx.length >> 1];
+    const id = blocs.length;
+    blocs.push({ id, field: new P.Field(this.map), tx: 0, ty: 0, arrive: 5, n: 0, target: -1, best: 1e9, stall: 0, holdT: 0, cx: 0, cy: 0 });
+    let sx = 0, sy = 0, m = 0;
+    for (let k = 0; k < idx.length; k++) if (dist[k] > cut) { const i = idx[k]; cr.grp[i] = id; sx += cr.x[i]; sy += cr.y[i]; m++; }
+    const nb = blocs[id]; nb.n = m; nb.cx = sx / m; nb.cy = sy / m; big.n -= m;
+    const o = this.map.nearestOpen(nb.cx, nb.cy, 12) || { x: big.tx, y: big.ty };
+    this.setBlocTarget(id, o.x, o.y, null);
+    this.emit('blocFormed', { id, x: nb.cx, y: nb.cy, n: m });
+    return true;
+  };
+
   World.prototype.pickBloc = function () {
     let best = 0, bn = 1e9;
     for (const b of this.blocs) if (b.n < bn) { bn = b.n; best = b.id; }
@@ -451,6 +480,7 @@
     // where each squad actually IS (its anchor is where it is going)
     for (const sq of this.squads) { if (sq.cnt) { sq.mx = sq.sumx / sq.cnt; sq.my = sq.sumy / sq.cnt; } else { sq.mx = sq.ax; sq.my = sq.ay; } }
     this.protCount = pc; this.polCount = polc; this.cassCount = cass;
+    this.earnBlocs();
     if (pc) { this.protCx = ccx / pc; this.protCy = ccy / pc; }
     if (polc) { this.polCx = pcx / polc; this.polCy = pcy / polc; }
     if (pc > this.stats.peak) this.stats.peak = pc;
@@ -821,6 +851,7 @@
     const lim = lv.starBurn || 20;
     return ['★★ win with fewer than ' + lim + ' cars burned', '★★★ win with fewer than ' + Math.ceil(lim / 2) + ' cars burned'];
   };
+  P.MAX_BLOCS = 4;         // A-D: the most columns a protest can split into
   P.TRUCK_GIVEUP_S = 20;   // seconds cut off before a truck gives up (re-plans on every street change meanwhile)
   P.World = World;
 })();

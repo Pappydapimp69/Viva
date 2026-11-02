@@ -91,6 +91,32 @@ test('a fire truck cut off for good gives up and goes home', () => {
   assert.ok(tr.done, 'gave up');
 });
 
+test('a growing protest earns new blocs that hold where they split off', () => {
+  const w = new P.World(P.LEVELS[0], { crowdScale: 0.5 });
+  const lm = w.map.landmarks[0];
+  w.setBlocTarget(0, lm.x, lm.y, lm.id);
+  const formed = [];
+  for (let s = 0; s * P.SIM_DT < 90 && !w.result; s++) {
+    w.tick(P.SIM_DT);
+    for (const e of w.events) if (e.type === 'blocFormed') formed.push({ t: w.time, e });
+    w.events.length = 0;
+  }
+  assert.ok(formed.length >= 1, 'earned at least one bloc in 90 s');
+  assert.ok(formed[0].t < 60, 'first one within a minute (' + formed[0].t.toFixed(0) + ' s)');
+  const b = w.blocs[formed[0].e.id];
+  assert.ok(b.n > 100 && b.target === -1, 'new bloc has people and no square to march on yet');
+  assert.ok(w.blocs.length <= P.MAX_BLOCS);
+});
+
+test('police levels and tutorials never split blocs', () => {
+  for (const lv of [P.LEVELS[2], P.TUTORIALS.protest]) {
+    const w = new P.World(lv, { crowdScale: 0.5 });
+    const n0 = w.blocs.length;
+    for (let s = 0; s * P.SIM_DT < 60; s++) { w.tick(P.SIM_DT); w.events.length = 0; }
+    assert.strictEqual(w.blocs.length, n0, lv.id);
+  }
+});
+
 test('police line forms across the street, at any street angle', () => {
   const w = new P.World(P.LEVELS[2], {});
   const sq = w.squads[0], m = w.map;
