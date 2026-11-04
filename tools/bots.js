@@ -9,7 +9,8 @@
 // 'strong' = per-objective policy using the side's tools (see each policy below).
 // 'far'    = capture levels only: every bloc marches at the square farthest from the objective, never retargets.
 (function () {
-  function createBot(P, w, policy) {
+  function createBot(P, w, policy, opts) {
+    opts = opts || {};
     const K = P.K, lms = w.map.landmarks, obj = w.objectives[0] || { type: 'survive' };
     const protest = w.side === P.SIDE.PROTEST;
     const dist = (a, b, x, y) => Math.hypot(a - x, b - y);
@@ -180,9 +181,7 @@
     // ---------------- police: hold ----------------
     function strongHold() {
       const lm = lms[obj.lm || 0];
-      trucks(14);
-      rescueTrucks();
-      reinforce(45);
+      if (opts.hold !== 'gasonly') { trucks(14); rescueTrucks(); reinforce(45); }
       // casseurs at the square: charge them
       const near = topCells(w.densC, 2, 1, 12, 4).filter((c) => dist(c.x, c.y, lm.x, lm.y) < lm.r + 25);
       for (const c of near) {
@@ -209,8 +208,17 @@
           if (dist(gx, gy, sq.ax, sq.ay) > 5) { w.orderSquad(sq, gx, gy, false, true); log.lines++; }
         });
       });
+      // charge the densest crowd inside the square (panics it out; cheaper than gas)
+      if (opts.hold === 'charge') {
+        const p = P.densAround(w, w.densP, lm.x, lm.y, Math.ceil(lm.r / P.CS));
+        const fs2 = freeSquads();
+        if (fs2.length && lm.prot > 25 && w.authority >= 5) {
+          const sq = fs2.reduce((a, s) => (dist(s.mx, s.my, p.x, p.y) < dist(a.mx, a.my, p.x, p.y) ? s : a));
+          charge(sq, p.x, p.y);
+        }
+      }
       // gas the densest crowd pressing on the square
-      if (ready('gas') && w.authority >= 10) {
+      if (opts.hold !== 'charge' && ready('gas') && w.authority >= 10) {
         const p = P.densAround(w, w.densP, lm.x, lm.y, Math.ceil((lm.r + 14) / P.CS));
         const blk = P.densAround(w, w.densP, p.x, p.y, 1).sum;
         if (blk > 25 * w.scale) {
