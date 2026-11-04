@@ -72,7 +72,7 @@ async function run(side, dev) {
   await sleep(500);
   if (dev === 'pad') { await tap(13); await sleep(200); }
   const log = [];
-  for (let guard = 0; guard < 20; guard++) {
+  for (let guard = 0; guard < 30; guard++) {
     const title = await step();
     if (title === 'DONE') break;
     const devShown = await ev(() => document.querySelector('#tutorial .tutDev').textContent);
@@ -123,6 +123,13 @@ async function run(side, dev) {
       case 'Your second bloc': {
         if (dev === 'pad') await tap(3); else await key('q');
         await act(await lmAt(1));
+        break;
+      }
+      case 'Earn more blocs': {
+        // B is selected from the previous step: one more Q / Y reaches C; send it to the final square
+        await sleep(300);
+        if (dev === 'pad') await tap(3); else await key('q');
+        await act(await lmAt(2));
         break;
       }
       case 'Switch squads': if (dev === 'pad') await tap(3); else await key('q'); break;

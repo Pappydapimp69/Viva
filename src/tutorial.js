@@ -85,7 +85,8 @@
     SPEED,
     {
       title: 'Take the square',
-      both: 'When far more of your people than police stand inside the ring, it fills red. The more people, the faster.',
+      both: 'When far more of your people than police stand inside the ring, it fills red. The more people, the faster. Top left, the square\'s row shows how far along it is and the time left, or what is stopping you.',
+      hi: '#objList',
       at: (t) => t.lm(0),
       progress: (t) => Math.round(Math.max(0, t.w.map.landmarks[0].control) * 100) + '%',
       done: (t) => t.w.map.landmarks[0].owner === 'protest',
@@ -195,6 +196,21 @@
       done: (t) => t.w.blocs[1] && t.w.blocs[1].target === t.w.map.landmarks[1].id,
     },
     {
+      title: 'Earn more blocs',
+      mk: 'As your crowd grows (2×, 3×, 4× what you started with) a new bloc splits off, up to four. Here is bloc <b>C</b>, waiting for orders. Press ' + kb('Q') + ' (or click <b>C</b> on the left) to select it, then <b>left-click</b> anywhere to send it.',
+      pad: 'As your crowd grows (2×, 3×, 4× what you started with) a new bloc splits off, up to four. Here is bloc <b>C</b>, waiting for orders. Press ' + btn('Y') + ' until bloc C is selected, then move anywhere and press ' + btn('A') + '.',
+      touch: 'As your crowd grows (2×, 3×, 4× what you started with) a new bloc splits off, up to four. Here is bloc <b>C</b>, waiting for orders. Tap <b>C</b> on the left, then tap anywhere on the map to send it.',
+      hi: '#blc_2',
+      setup(t) {
+        const w = t.w;
+        if (w.blocs.length < 3) w.splitBloc(); // in a real level this happens by itself as the crowd grows
+        const c = w.blocs[2];
+        if (c) t.s.c0 = { x: c.tx, y: c.ty };
+      },
+      at: (t) => { const c = t.w.blocs[2]; return c && c.n ? { x: c.cx, y: c.cy, r: 12 } : null; },
+      done: (t) => { const c = t.w.blocs[2]; return !c || (t.s.c0 && Math.hypot(c.tx - t.s.c0.x, c.ty - t.s.c0.y) > 8); },
+    },
+    {
       title: 'Call for backup',
       touch: 'Short of people? Tap <b>MOBILISE</b> in the toolbar: the group chat brings 800 more.',
       mk: 'Short of people? Press ' + kb('5') + ' to <b>Mobilise</b>: the group chat brings 800 more.',
@@ -215,7 +231,7 @@
     },
     {
       title: 'Final test',
-      both: 'The police now defend Place de la {lm2}. Take it however you like: both blocs, fireworks on the lines, barricades behind you.',
+      both: 'The police now defend Place de la {lm2}. Take it however you like: all your blocs, fireworks on the lines, barricades behind you. Watch its row top left for what is holding you back.',
       setup(t) {
         const w = t.w, lm = w.map.landmarks[2] || w.map.landmarks[1];
         t.s.lm = lm;
