@@ -166,8 +166,8 @@
     },
     pad: {
       'Camera': [['Move', 'left stick (cursor stays centred)'], ['Zoom', 'right stick up/down, ' + B_('LT') + ' / ' + B_('RT')], ['Hot spot', 'D-pad down'], ['Pause', B_('Start')], ['Speed 1×/2×/3×', B_('Back')]],
-      '✊ Protest': [['Use the tool', B_('A') + ' (cursor snaps to squares, police, trucks)'], ['Change tool', B_('LB') + ' / ' + B_('RB')], ['Cancel / back to March', B_('B')], ['Next bloc', B_('Y') + ' (jumps there)'], ['Go to bloc', B_('X')], ['Barricade', 'hold ' + B_('A') + ', move, release'], ['Mobilise', 'D-pad up']],
-      '🛡 Police': [['Select squad / place its line', B_('A')], ['Change tool', B_('LB') + ' / ' + B_('RB')], ['Cancel / back to Line', B_('B')], ['Next squad', B_('Y') + ' (jumps there)'], ['Go to squad', B_('X')], ['Barrier', 'hold ' + B_('A') + ', move, release'], ['Reinforce', 'D-pad up']],
+      '✊ Protest': [['Use the tool', B_('A') + ' (cursor snaps to squares, police, trucks)'], ['Change tool', B_('LB') + ' / ' + B_('RB')], ['March here (any tool)', B_('B')], ['Next bloc', B_('Y') + ' (jumps there)'], ['Go to bloc', B_('X')], ['Barricade', 'hold ' + B_('A') + ', move, release'], ['Mobilise', 'D-pad up']],
+      '🛡 Police': [['Select squad / place its line', B_('A')], ['Change tool', B_('LB') + ' / ' + B_('RB')], ['Line here (any tool)', B_('B')], ['Next squad', B_('Y') + ' (jumps there)'], ['Go to squad', B_('X')], ['Barrier', 'hold ' + B_('A') + ', move, release'], ['Reinforce', 'D-pad up']],
     },
   };
   function buildControls(dev) {
@@ -743,14 +743,23 @@
     if (pad.pressed(PB.A)) {
       audio.init();
       if (tool === 'barricade' || tool === 'barrier') mouse.drag = { x: c.x, y: c.y };
-      else if (padSnap && padSnap.kind === 'squad' && tool === 'move') { selSquad = padSnap.ref; audio.play('ui'); tip(world.squads[selSquad].name + ' selected — move and press A to place the line', true); }
+      else if (padSnap && padSnap.kind === 'squad' && world.side === S.POLICE) { /* A on one of your squads selects it, whatever the tool */ selSquad = padSnap.ref; audio.play('ui'); tip(world.squads[selSquad].name + ' selected — move and press ' + (tool === 'move' ? 'A' : 'B') + ' to place its line', true); }
       else primary(w.x, w.y);
     }
     if (pad.released(PB.A) && mouse.drag) { placeLine(mouse.drag, c); mouse.drag = null; }
-    // B cancels: drop a barricade being drawn, else go back to the default tool
+    // B: drop a barricade being drawn; otherwise march the selected bloc (police: form the selected
+    // squad's line) at the cursor right now, without changing the tool you have picked
     if (pad.pressed(PB.B)) {
+      audio.init();
       if (mouse.drag) mouse.drag = null;
-      else pickTool(world.side === S.PROTEST ? 'march' : 'move');
+      else {
+        const keep = tool;
+        tool = world.side === S.PROTEST ? 'march' : 'move';
+        if (tool === 'move' && padSnap && padSnap.kind === 'squad') { selSquad = padSnap.ref; audio.play('ui'); }
+        else if (tool === 'move') orderSel(w.x, w.y, false);
+        else primary(w.x, w.y);
+        tool = keep;
+      }
     }
     if (pad.pressed(PB.X)) { // jump the camera to the selection
       centerSel(); audio.play('ui');

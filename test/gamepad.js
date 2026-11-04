@@ -69,7 +69,13 @@ const path = require('path');
   const t0 = await p.evaluate(() => PAVE.debug.tool); await tap(5); const t1 = await p.evaluate(() => PAVE.debug.tool);
   ok(t0 !== t1, 'RB changes tool ' + t0 + ' -> ' + t1);
   await tap(4); ok(await p.evaluate(() => PAVE.debug.tool) === t0, 'LB goes back');
-  await tap(5); await tap(1); ok(await p.evaluate(() => PAVE.debug.tool) === 'move', 'B cancels back to the default tool');
+  await tap(5);
+  const t5 = await p.evaluate(() => PAVE.debug.tool);
+  const lineBefore = await p.evaluate(() => { const s = PAVE.debug.world.squads[PAVE.debug.selSquad]; return s ? [s.ax, s.ay] : null; });
+  await tap(1);
+  ok(await p.evaluate(() => PAVE.debug.tool) === t5, 'B keeps the picked tool');
+  const lineAfter = await p.evaluate(() => { const s = PAVE.debug.world.squads[PAVE.debug.selSquad]; return s ? [s.ax, s.ay] : null; });
+  ok(lineBefore && lineAfter && (lineBefore[0] !== lineAfter[0] || lineBefore[1] !== lineAfter[1]), 'B forms the selected squad\'s line at the cursor');
   // reticle snaps onto a squad, A selects it
   const tsq = await p.evaluate(() => { const w = PAVE.debug.world, i = (PAVE.debug.selSquad + 1) % w.squads.length, sq = w.squads[i]; return { i, x: sq.mx, y: sq.my }; });
   const target = tsq.i;
@@ -109,6 +115,12 @@ const path = require('path');
   await tap(0);
   ok(await p.evaluate((id) => PAVE.debug.world.blocs[0].target === id, lmId), 'A marches the bloc to the snapped landmark');
   await tap(5); ok(await p.evaluate(() => PAVE.debug.tool) === 'casseurs', 'RB reaches Casseurs on the protest side');
+  // B marches the selected bloc to the cursor with Casseurs still picked
+  const lm2 = await p.evaluate(() => { const w = PAVE.debug.world, L = w.map.landmarks, lm = L[2] || L[0]; return { id: lm.id, x: lm.x + 2, y: lm.y + 1 }; });
+  await steer(lm2.x, lm2.y);
+  await tap(1);
+  ok(await p.evaluate((id) => PAVE.debug.world.blocs[PAVE.debug.selBloc].target === id, lm2.id), 'B marches the bloc to the cursor');
+  ok(await p.evaluate(() => PAVE.debug.tool) === 'casseurs', 'B leaves Casseurs picked');
   // a panel that pops up while the stick is still held from play must not move its focus
   await p.evaluate(() => PAVE.debug.startTutorial('protest'));
   await p.waitForFunction(() => PAVE.debug.tut && PAVE.debug.screen === null, null, { timeout: 15000 });

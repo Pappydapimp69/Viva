@@ -123,7 +123,7 @@
     {
       title: 'Pin a fire truck',
       mk: 'A fire truck is coming for that fire. Press ' + kb('1') + ' for <b>March</b> and <b>left-click the truck</b>: your bloc packs round it. Pinned for a few seconds, the crew walks away and it stops spraying.',
-      pad: 'A fire truck is coming for that fire. Press ' + btn('B') + ' for <b>March</b>, move onto the truck (the cursor snaps to it) and press ' + btn('A') + ': your bloc packs round it. Pinned for a few seconds, the crew walks away.',
+      pad: 'A fire truck is coming for that fire. Move onto the truck (the cursor snaps to it) and press ' + btn('B') + ': ' + btn('B') + ' always marches your bloc to the cursor, whatever tool is picked. Your bloc packs round the truck; pinned for a few seconds, the crew walks away.',
       setup(t) { this.sendTruck(t); },
       sendTruck(t) {
         const w = t.w, b = crowdSpot(t), m = w.map;

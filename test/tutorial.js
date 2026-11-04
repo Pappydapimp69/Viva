@@ -105,9 +105,9 @@ async function run(side, dev) {
         break;
       }
       case 'Pin a fire truck': {
-        if (dev === 'pad') await tap(1); else await key('1');
+        if (dev !== 'pad') await key('1');
         const tr = await target();
-        if (tr) { if (dev === 'pad') { await steerTo(tr.x, tr.y, true); await tap(0); } else await act(tr); }
+        if (tr) { if (dev === 'pad') { await steerTo(tr.x, tr.y, true); await tap(1); } else await act(tr); }
         const watch = async () => ev(() => { const w = PAVE.debug.world, t0 = PAVE.debug.tut.s.truck, b = w.blocs[PAVE.debug.selBloc || 0];
           return t0 ? { tool: PAVE.debug.tool, snap: PAVE.debug.padSnap && PAVE.debug.padSnap.kind, truck: [t0.x | 0, t0.y | 0, t0.state, +(t0.sur || 0).toFixed(1), t0.press], bloc: [b.id, b.tx | 0, b.ty | 0, !!b.truck, b.n], sel: PAVE.debug.selBloc } : 'no truck'; });
         if (process.env.TUT_DEBUG) console.log('DEBUG truck after A', JSON.stringify(await watch()));
@@ -116,8 +116,7 @@ async function run(side, dev) {
         break;
       }
       case 'Tear gas!': {
-        if (dev === 'pad') await tap(1); else await key('1');
-        await act(await lmAt(2));
+        if (dev === 'pad') { const L = await lmAt(2); await steerTo(L.x, L.y); await tap(1); } else { await key('1'); await act(await lmAt(2)); }
         break;
       }
       case 'Your second bloc': {
