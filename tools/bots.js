@@ -86,7 +86,7 @@
       // fireworks on the police at the goal once a bloc is close; mobilise with spare energy
       if (goal && ready('fw') && w.energy >= 6) {
         const pol = P.densAround(w, w.densPol, goal.x, goal.y, Math.ceil((goal.r + 14) / P.CS));
-        const close = blocs.some((b) => dist(b.cx, b.cy, goal.x, goal.y) < goal.r + 35);
+        const close = goal.prot > 10 || blocs.some((b) => dist(b.cx, b.cy, goal.x, goal.y) < goal.r + 60);
         if (pol.sum > 6 && close) {
           const i = nearestNonPol(pol.x, pol.y, 40);
           if (i >= 0) { w.launchFireworks(w.crowd.x[i], w.crowd.y[i], pol.x, pol.y); w.energy -= 6; arm('fw', 5); log.fireworks++; }
