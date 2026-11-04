@@ -158,6 +158,7 @@
     {
       title: 'Tear gas!',
       both: 'The police just gassed your bloc. People in the cloud panic and run, and some give up and go home: watch CROWD drop. <b>Get them out</b>: march the bloc somewhere else.',
+      pad: 'The police just gassed your bloc. People in the cloud panic and run, and some give up and go home: watch CROWD drop. <b>Get them out</b>: move somewhere else and press ' + btn('B') + ' to march there.',
       hi: '#topRight .resRow',
       setup(t) {
         const sq = squadToBloc(t), c = crowdSpot(t);
@@ -189,7 +190,7 @@
     {
       title: 'Your second bloc',
       mk: 'You have two blocs. Press ' + kb('Q') + ' (or click <b>B</b> on the left) to select bloc B, then <b>left-click</b> Place de la {lm1}.',
-      pad: 'You have two blocs. Press ' + btn('Y') + ' to select bloc B and jump to it, then move onto Place de la {lm1} and press ' + btn('A') + '.',
+      pad: 'You have two blocs. Press ' + btn('Y') + ' to select bloc B and jump to it, then move onto Place de la {lm1} and press ' + btn('B') + '. ' + btn('B') + ' marches the selected bloc whatever tool is picked.',
       hi: '#blc_1',
       setup(t) { t.api.pickTool('march'); t.api.setSelBloc(0); },
       at: (t) => t.lm(1),
@@ -198,7 +199,7 @@
     {
       title: 'Earn more blocs',
       mk: 'As your crowd grows (2×, 3×, 4× what you started with) a new bloc splits off, up to four. Here is bloc <b>C</b>, waiting for orders. Press ' + kb('Q') + ' (or click <b>C</b> on the left) to select it, then <b>left-click</b> anywhere to send it.',
-      pad: 'As your crowd grows (2×, 3×, 4× what you started with) a new bloc splits off, up to four. Here is bloc <b>C</b>, waiting for orders. Press ' + btn('Y') + ' until bloc C is selected, then move anywhere and press ' + btn('A') + '.',
+      pad: 'As your crowd grows (2×, 3×, 4× what you started with) a new bloc splits off, up to four. Here is bloc <b>C</b>, waiting for orders. Press ' + btn('Y') + ' until bloc C is selected, then move anywhere and press ' + btn('B') + '.',
       touch: 'As your crowd grows (2×, 3×, 4× what you started with) a new bloc splits off, up to four. Here is bloc <b>C</b>, waiting for orders. Tap <b>C</b> on the left, then tap anywhere on the map to send it.',
       hi: '#blc_2',
       setup(t) {
@@ -259,7 +260,7 @@
     {
       title: 'Form a line',
       mk: '<b>Right-click</b> the marked street. {sq1} forms a shield line right across it by itself.',
-      pad: 'Move to the marked street and press ' + btn('A') + '. {sq1} forms a shield line right across it by itself.',
+      pad: 'Move to the marked street and press ' + btn('A') + '. {sq1} forms a shield line right across it by itself. Later, with another tool picked, ' + btn('B') + ' still places the selected squad\'s line at the cursor.',
       setup(t) {
         // a street point between the target square and the nearest crowd
         const lm = t.w.map.landmarks[0], b = t.w.nearestBloc(lm.x, lm.y) || { cx: t.w.map.W / 2, cy: t.w.map.H / 2 };

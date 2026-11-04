@@ -120,15 +120,13 @@ async function run(side, dev) {
         break;
       }
       case 'Your second bloc': {
-        if (dev === 'pad') await tap(3); else await key('q');
-        await act(await lmAt(1));
+        if (dev === 'pad') { await tap(3); const L = await lmAt(1); await steerTo(L.x, L.y); await tap(1); } else { await key('q'); await act(await lmAt(1)); }
         break;
       }
       case 'Earn more blocs': {
         // B is selected from the previous step: one more Q / Y reaches C; send it to the final square
         await sleep(300);
-        if (dev === 'pad') await tap(3); else await key('q');
-        await act(await lmAt(2));
+        if (dev === 'pad') { await tap(3); const L = await lmAt(2); await steerTo(L.x, L.y); await tap(1); } else { await key('q'); await act(await lmAt(2)); }
         break;
       }
       case 'Switch squads': if (dev === 'pad') await tap(3); else await key('q'); break;
